@@ -13,8 +13,8 @@ NUM_BOIDS = 10
 MAX_SPEED = 2
 MAX_FORCE = 0.5
 OBJECT_PUSH_FORCE = 0.2
-NEIGHBOR_RADIUS = 200
-SEPARATION_RADIUS = 30
+NEIGHBOR_RADIUS = 300
+SEPARATION_RADIUS = 10
 OBJECT_SEPERATION_RADIUS = 50
 TRIANGLE_SIZE = 5
 ATTRACTION_RADIUS = 100
@@ -31,11 +31,18 @@ BOOT_EQUIPPED = False
 LEVEL = 1
 
 # Game states
+GAME_STATE_SPLASH = "splash"
 GAME_STATE_MENU = "menu"
 GAME_STATE_KILL_TUTORIAL = "kill_tutorial"
 GAME_STATE_DONT_DIE_TUTORIAL = "dont_die_tutorial"
 GAME_STATE_MAIN_GAME = "main_game"
-current_game_state = GAME_STATE_MENU
+current_game_state = GAME_STATE_SPLASH
+
+# Splash screen settings
+SPLASH_DISPLAY_TIME = 2000  # 2 seconds in milliseconds
+FADE_DURATION = 500  # 0.5 second fade duration
+splash_start_time = None
+splash_image = None
 
 # Spawn holes configuration
 NUM_SPAWN_HOLES = 4
@@ -43,6 +50,77 @@ SPAWN_HOLE_RADIUS = 20
 spawn_holes = []
 
 L1 = {"character": "ants"}
+
+def load_splash_image():
+    """Load and scale the splash screen image to fill entire screen"""
+    global splash_image
+    try:
+        splash_image = pygame.image.load("killbugs.png").convert_alpha()
+        # Stretch to fill entire screen dimensions
+        splash_image = pygame.transform.scale(splash_image, (WIDTH, HEIGHT))
+        print(f"Splash image stretched to full screen: {WIDTH}x{HEIGHT}")
+        
+    except pygame.error as e:
+        print(f"Warning: killbugs.png not found or invalid: {e}")
+        splash_image = None
+    except Exception as e:
+        print(f"Error loading splash image: {e}")
+        splash_image = None
+
+def draw_splash_screen(screen, current_time):
+    """Draw the splash screen with fade effect"""
+    global splash_start_time
+    
+    if splash_start_time is None:
+        splash_start_time = current_time
+    
+    elapsed = current_time - splash_start_time
+    
+    # Fill background
+    screen.fill((0, 0, 0))  # Black background
+    
+    if splash_image:
+        # Calculate alpha for fade effect
+        if elapsed < SPLASH_DISPLAY_TIME:
+            alpha = 255  # Full opacity during display time
+        elif elapsed < SPLASH_DISPLAY_TIME + FADE_DURATION:
+            # Fade out
+            fade_progress = (elapsed - SPLASH_DISPLAY_TIME) / FADE_DURATION
+            alpha = int(255 * (1.0 - fade_progress))
+        else:
+            alpha = 0
+        
+        if alpha > 0:
+            # Create a copy of the image with alpha
+            faded_image = splash_image.copy()
+            faded_image.fill((255, 255, 255, alpha), None, pygame.BLEND_RGBA_MULT)
+            
+            # Center the image on screen
+            image_rect = faded_image.get_rect(center=(WIDTH//2, HEIGHT//2))
+            screen.blit(faded_image, image_rect)
+    else:
+        # Fallback text splash screen
+        font = pygame.font.Font(None, 72)
+        text = font.render("KILL BUGS", True, (255, 255, 255))
+        text_rect = text.get_rect(center=(WIDTH//2, HEIGHT//2))
+        
+        # Calculate alpha for text fade
+        if elapsed < SPLASH_DISPLAY_TIME:
+            alpha = 255
+        elif elapsed < SPLASH_DISPLAY_TIME + FADE_DURATION:
+            fade_progress = (elapsed - SPLASH_DISPLAY_TIME) / FADE_DURATION
+            alpha = int(255 * (1.0 - fade_progress))
+        else:
+            alpha = 0
+        
+        if alpha > 0:
+            # Create surface with alpha for text
+            text_surface = pygame.Surface(text.get_size(), pygame.SRCALPHA)
+            text_surface.fill((255, 255, 255, alpha))
+            text_surface.blit(text, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            screen.blit(text_surface, text_rect)
+    
+    return elapsed >= SPLASH_DISPLAY_TIME + FADE_DURATION
 
 def create_spawn_holes():
     """Create spawn holes in random locations around the edges"""
@@ -108,102 +186,6 @@ def render_UI(screen, boids):
     c = 50
     d = 10
 
-    # button_add_boids = pygame.Rect(a, b, c, d)  # Button to add boids
-    # button_remove_boids = pygame.Rect(a+60, b, c, d)  # Button to remove boids
-    # button_add_speed = pygame.Rect(a, b+20, c, d)  # Button to increase speed
-    # button_remove_speed = pygame.Rect(a+60, b+20, c, d)
-    # button_add_force = pygame.Rect(a, b+40, c, d)  # Button to increase force
-    # button_remove_force = pygame.Rect(a+60, b+40, c, d)
-    # button_add_neighbor_radius = pygame.Rect(a, b+60, c, d)
-    # button_remove_neighbor_radius = pygame.Rect(a+60, b+60, c, d)
-    # button_add_separation_radius = pygame.Rect(a, b+80, c, d)
-    # button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
-    # button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
-    # button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
-    # button_hatch_worker = pygame.Rect(a+60, b+240, c+40, d)
-    # button_hatch_queen = pygame.Rect(a+60, b+260, c+40, d)
-
-    # pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
-    # pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
-    # pygame.draw.rect(screen, (255, 255, 255), button_add_speed)
-    # pygame.draw.rect(screen, (255, 255, 255), button_remove_speed)
-    # pygame.draw.rect(screen, (255, 255, 255), button_add_force)
-    # pygame.draw.rect(screen, (255, 255, 255), button_remove_force)
-    # pygame.draw.rect(screen, (255, 255, 255), button_add_neighbor_radius)
-    # pygame.draw.rect(screen, (255, 255, 255), button_remove_neighbor_radius)
-    # pygame.draw.rect(screen, (255, 255, 255), button_add_separation_radius)
-    # pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
-    # pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
-    # pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
-    # pygame.draw.rect(screen, (255, 255, 255), button_hatch_worker)
-    # pygame.draw.rect(screen, (255, 255, 255), button_hatch_queen)
-
-    # for button, label in [
-    #         (button_add_boids, "+"),
-    #         (button_remove_boids, "-"),
-    #         (button_add_speed, "+"),
-    #         (button_remove_speed, "-"),
-    #         (button_add_force, "+"),
-    #         (button_remove_force, "-"),
-    #         (button_add_neighbor_radius, "+"),
-    #         (button_remove_neighbor_radius, "-"),
-    #         (button_add_separation_radius, "+"),
-    #         (button_remove_separation_radius, "-"),
-    #         (button_add_object_separation_radius, "+"),
-    #         (button_remove_object_separation_radius, "-")
-    #     ]:
-    #         text = font.render(label, True, (0, 0, 0))  # Black text
-    #         text_rect = text.get_rect(center=button.center)
-    #         screen.blit(text, text_rect)
-
-    # boid_count_text = font.render(f"LEVEL {LEVEL}", True, (255, 255, 255))  # White text
-    # max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
-    # max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
-    # neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
-    # separation_radius_text = font.render(f"Separation Radius: {SEPARATION_RADIUS}", True, (255, 255, 255))
-    # width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
-    # height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
-    # object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
-    # queens_text = font.render(f"Queens: {QUEENS}", True, (255, 255, 255))
-    # larva_text = font.render(f"Larva: {LARVA}", True, (255, 255, 255))
-    # food_text = font.render(f"Food: {FOOD}", True, (255, 255, 255))
-    # worker_text = font.render(f"Workers: {len(boids)}", True, (255, 255, 255))
-    # hatch_worker_text = font.render(f"Hatch Worker for 10 food and 1 larva", True, (255, 255, 255))
-    # hatch_queen_text = font.render(f"Hatch Queen for 500 food and 10 larva", True, (255, 255, 255))
-
-    # Draw it on screen at top-left
-    # screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
-    # screen.blit(max_speed_text, (10, 30))
-    # screen.blit(max_force_text, (10, 50))
-    # screen.blit(neighbor_radius_text, (10, 70))
-    # screen.blit(separation_radius_text, (10, 90))
-    # screen.blit(object_separation_radius_text, (10, 110))
-    # screen.blit(width_text, (10, 130))
-    # screen.blit(height_text, (10, 150))
-    # screen.blit(queens_text, (10, 170))
-    # screen.blit(larva_text, (10, 190))
-    # screen.blit(food_text, (10, 210))
-    # screen.blit(worker_text, (10, 230))
-    # screen.blit(hatch_worker_text, (10, 250))
-    # screen.blit(hatch_queen_text, (10, 270))
-
-    # return [
-    #     button_add_boids,
-    #     button_remove_boids,
-    #     button_add_speed,
-    #     button_remove_speed,
-    #     button_add_force,
-    #     button_remove_force,
-    #     button_add_neighbor_radius,
-    #     button_remove_neighbor_radius,
-    #     button_add_separation_radius,
-    #     button_remove_separation_radius,
-    #     button_add_object_separation_radius,
-    #     button_remove_object_separation_radius,
-    #     button_hatch_worker,
-    #     button_hatch_queen,
-    # ]
-
     return []
 
 # Declare mouse_held as a global variable
@@ -214,21 +196,6 @@ def manage_UI(buttons, boids, movable_objects, splats):
     global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, mouse_held, last_add_time, FOOD, LARVA, WORKERS, QUEENS
     dragging_object = False  # Flag to check if an object is being dragged
 
-    # button_add_boids = buttons[0]
-    # button_remove_boids = buttons[1]
-    # button_add_speed = buttons[2]
-    # button_remove_speed = buttons[3]
-    # button_add_force = buttons[4]
-    # button_remove_force = buttons[5]
-    # button_add_neighbor_radius = buttons[6]
-    # button_remove_neighbor_radius = buttons[7]
-    # button_add_separation_radius = buttons[8]
-    # button_remove_separation_radius = buttons[9]
-    # button_add_object_separation_radius = buttons[10]
-    # button_remove_object_separation_radius = buttons[11]
-    # button_hatch_worker = buttons[12]
-    # button_hatch_queen = buttons[13]
-    
     dragging = False
     for event in pygame.event.get():
         
@@ -258,59 +225,6 @@ def manage_UI(buttons, boids, movable_objects, splats):
 
     # Get the current time
     current_time = pygame.time.get_ticks()
-
-    # Check if the mouse is held and throttle actions
-    # if not dragging and mouse_held and current_time - last_add_time > 50:  # 50ms delay
-    #     mouse_pos = pygame.mouse.get_pos()
-
-    #     if button_add_boids.collidepoint(mouse_pos):
-    #         new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-    #         boids.append(new_boid)
-    #     elif button_remove_boids.collidepoint(mouse_pos):
-    #         if boids:
-    #             boids.pop()
-    #     elif button_add_speed.collidepoint(mouse_pos):
-    #         MAX_SPEED += 1
-    #     elif button_remove_speed.collidepoint(mouse_pos):
-    #         if MAX_SPEED > 1:
-    #             MAX_SPEED -= 1
-    #     elif button_add_force.collidepoint(mouse_pos):
-    #         MAX_FORCE += 0.1
-    #     elif button_remove_force.collidepoint(mouse_pos):
-    #         if MAX_FORCE > 0.1:
-    #             MAX_FORCE -= 0.1
-    #     elif button_add_neighbor_radius.collidepoint(mouse_pos):
-    #         NEIGHBOR_RADIUS += 10
-    #     elif button_remove_neighbor_radius.collidepoint(mouse_pos):
-    #         if NEIGHBOR_RADIUS > 10:
-    #             NEIGHBOR_RADIUS -= 10
-    #     elif button_add_separation_radius.collidepoint(mouse_pos):
-    #         SEPARATION_RADIUS += 10
-    #     elif button_remove_separation_radius.collidepoint(mouse_pos):
-    #         if SEPARATION_RADIUS > 10:
-    #             SEPARATION_RADIUS -= 10
-    #     elif button_add_object_separation_radius.collidepoint(mouse_pos):
-    #         OBJECT_SEPERATION_RADIUS += 10
-    #     elif button_remove_object_separation_radius.collidepoint(mouse_pos):
-    #         if OBJECT_SEPERATION_RADIUS > 10:
-    #             OBJECT_SEPERATION_RADIUS -= 10
-    #     elif button_hatch_worker.collidepoint(mouse_pos):
-    #         if FOOD >= 10 and LARVA >= 1:
-    #             FOOD -= 10
-    #             LARVA -= 1
-    #             WORKERS += 1
-    #             new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-    #             boids.append(new_boid)
-    #     elif button_hatch_queen.collidepoint(mouse_pos):
-    #         if FOOD >= 500 and LARVA >= 10:
-    #             FOOD -= 500
-    #             LARVA -= 10
-    #             QUEENS += 1
-    #             new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-    #             boids.append(new_boid)
-
-    #     # Update the last action time
-    #     last_add_time = current_time
 
     return True
 
@@ -988,37 +902,81 @@ class Splat:
             screen.blit(Splat.splat_image, rect)
 
 async def main():
-    global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, WIDTH, HEIGHT, OBJECT_SEPERATION_RADIUS, OBJECTS_IN_GOAL, LARVA, QUEENS, FOOD, current_game_state
     pygame.init()
-    try:
-        pygame.mixer.quit()  # no audio on web
-    except Exception:
+    try: 
+        pygame.mixer.quit()
+    except Exception: 
         pass
-
-    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
-    pygame.display.set_caption("Kill Bugs - Tutorial Game")
+    
+    # Set up display with proper sizing
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Kill Bugs — Stomp the Swarm")
+    
+    # Ensure we have the correct screen dimensions
+    actual_size = screen.get_size()
+    print(f"Screen size: {actual_size[0]}x{actual_size[1]}")
+    
     clock = pygame.time.Clock()
-
+    
+    # Load splash screen image after screen is set up
+    load_splash_image()
+    
+    global current_game_state
+    
     running = True
     while running:
-        await asyncio.sleep(0)
+        current_time = pygame.time.get_ticks()
         
-        if current_game_state == GAME_STATE_MENU:
-            # Draw and handle menu
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+        
+        if current_game_state == GAME_STATE_SPLASH:
+            # Handle splash screen events (allow skipping)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                    # Skip splash screen on any input
+                    current_game_state = GAME_STATE_MENU
+            
+            # Draw splash screen and check if it's finished
+            splash_finished = draw_splash_screen(screen, current_time)
+            if splash_finished:
+                current_game_state = GAME_STATE_MENU
+        
+        elif current_game_state == GAME_STATE_MENU:
+            # Handle menu events
             menu_buttons = draw_menu(screen)
-            running = handle_menu_events(menu_buttons)
-            pygame.display.flip()
-            clock.tick(30)
+            action = handle_menu_events(menu_buttons)
             
+            if action == "kill_tutorial":
+                current_game_state = GAME_STATE_KILL_TUTORIAL
+            elif action == "dont_die_tutorial":
+                current_game_state = GAME_STATE_DONT_DIE_TUTORIAL
+            elif action == "main_game":
+                current_game_state = GAME_STATE_MAIN_GAME
+            elif not action:  # False means quit
+                running = False
+        
         elif current_game_state == GAME_STATE_KILL_TUTORIAL:
-            running = await run_kill_tutorial(screen, clock)
-            
+            result = await run_kill_tutorial(screen, clock)
+            if result == "menu":
+                current_game_state = GAME_STATE_MENU
+        
         elif current_game_state == GAME_STATE_DONT_DIE_TUTORIAL:
-            running = await run_dont_die_tutorial(screen, clock)
-            
+            result = await run_dont_die_tutorial(screen, clock)
+            if result == "menu":
+                current_game_state = GAME_STATE_MENU
+        
         elif current_game_state == GAME_STATE_MAIN_GAME:
-            # Run the original main game
-            running = await run_main_game(screen, clock)
+            result = await run_main_game(screen, clock)
+            if result == "menu":
+                current_game_state = GAME_STATE_MENU
+        
+        pygame.display.flip()
+        clock.tick(60)
+        await asyncio.sleep(0)
     
     pygame.quit()
 
@@ -1081,10 +1039,6 @@ async def run_main_game(screen, clock):
         screen.fill((0, 100, 0))  # RGB for dark green
 
         # Draw a black filled circle in the middle of the screen as the base
-        #base_center = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
-        #base_radius = 40
-        #pygame.draw.circle(screen, (0, 0, 0), base_center, base_radius)  # filled black # Draw base
-        
         # Draw spawn holes
         draw_spawn_holes(screen)
         
