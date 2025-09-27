@@ -10,8 +10,8 @@ import pygame
 WIDTH, HEIGHT = 1000, 1000
 # Boid settings
 NUM_BOIDS = 10
-MAX_SPEED = 2
-MAX_FORCE = 0.5
+MAX_SPEED = 5
+MAX_FORCE = 1
 OBJECT_PUSH_FORCE = 0.2
 NEIGHBOR_RADIUS = 300
 SEPARATION_RADIUS = 10
@@ -344,13 +344,13 @@ async def run_kill_tutorial(screen, clock):
     
     # Load tutorial illustration image
     tutorial_image = None
-    try:
-        tutorial_image = pygame.image.load("kill_tutorial.png").convert_alpha()
-        # Scale to reasonable size for tutorial display
-        tutorial_image = pygame.transform.smoothscale(tutorial_image, (200, 150))
-    except Exception as e:
-        print(f"Error loading kill_tutorial.png: {e}")
-        tutorial_image = None
+    #try:
+    #    tutorial_image = pygame.image.load("kill_tutorial.png").convert_alpha()
+    #    # Scale to reasonable size for tutorial display
+    #    tutorial_image = pygame.transform.smoothscale(tutorial_image, (200, 150))
+    #except Exception as e:
+    #    print(f"Error loading kill_tutorial.png: {e}")
+    #    tutorial_image = None
     
     # Load splat image
     splat_image = None
@@ -927,19 +927,15 @@ async def main():
     while running:
         current_time = pygame.time.get_ticks()
         
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+        #for event in pygame.event.get():
+        #    if event.type == pygame.QUIT:
+        #        running = False
         
         if current_game_state == GAME_STATE_SPLASH:
             # Handle splash screen events (allow skipping)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-                    # Skip splash screen on any input
-                    current_game_state = GAME_STATE_MENU
-            
             # Draw splash screen and check if it's finished
             splash_finished = draw_splash_screen(screen, current_time)
             if splash_finished:
@@ -1029,8 +1025,11 @@ async def run_main_game(screen, clock):
     start_time = pygame.time.get_ticks()
     timer_duration = 30000  # 30 seconds in milliseconds
     success_displayed = False
+
+    exit_status = "loss"
+
     final_points = None
-    final_food_health = 0
+    final_food_health = 60
     final_ants_killed = 0
 
     ant_spawn_timer = pygame.time.get_ticks()
@@ -1091,10 +1090,20 @@ async def run_main_game(screen, clock):
         timer_text = font.render(f"Time Left: {time_left}s", True, (255, 255, 255))
         screen.blit(timer_text, (WIDTH // 2 - timer_text.get_width() // 2, 20))
 
+        food_objects = [obj for obj in objects if isinstance(obj, FoodObject)]
+
+        if final_food_health == 0:
+            exit_status = "loss"
+            success_displayed = True
+            boids.clear()
+            objects.clear()
+            final_ants_killed = KILLS if 'KILLS' in globals() else 0
+            final_points = final_food_health * 10 + final_ants_killed * 5
+
         # Check for success
         if elapsed >= timer_duration and not success_displayed:
-            food_objects = [obj for obj in objects if isinstance(obj, FoodObject)]
             if food_objects:
+                exit_status = "success"
                 success_text = font.render("Success!", True, (0, 255, 0))
                 screen.blit(success_text, (WIDTH // 2 - success_text.get_width() // 2, HEIGHT // 2 - 24))
                 # Calculate points
@@ -1108,8 +1117,11 @@ async def run_main_game(screen, clock):
 
         # Optionally, stop updating everything after level ends
         if success_displayed:
-            # Draw "Level Complete" message
-            complete_text = font.render("Level 1 Complete!", True, (255, 255, 0))
+            if exit_status == "loss":
+                complete_text = font.render("Level 1 Failed :(", True, (255, 255, 0))
+            else:
+                # Draw "Level Complete" message
+                complete_text = font.render("Level 1 Complete!", True, (255, 255, 0))
             screen.blit(complete_text, (WIDTH // 2 - complete_text.get_width() // 2, HEIGHT // 2 + 40))
             # Show points summary
             points_text = font.render(f"Points: {final_points}", True, (0, 200, 255))
@@ -1134,6 +1146,8 @@ async def run_main_game(screen, clock):
             for obj in objects:
                 obj.update(target_position, boids)
                 obj.draw(screen)
+
+        final_food_health = sum(obj.health for obj in food_objects)
 
         pygame.display.flip()
         clock.tick(30)
