@@ -10,8 +10,8 @@ import pygame
 WIDTH, HEIGHT = 1000, 1000
 # Boid settings
 NUM_BOIDS = 10
-MAX_SPEED = 5
-MAX_FORCE = 1
+MAX_SPEED = 2
+MAX_FORCE = 0.5
 OBJECT_PUSH_FORCE = 0.2
 NEIGHBOR_RADIUS = 200
 SEPARATION_RADIUS = 30
@@ -37,6 +37,68 @@ GAME_STATE_DONT_DIE_TUTORIAL = "dont_die_tutorial"
 GAME_STATE_MAIN_GAME = "main_game"
 current_game_state = GAME_STATE_MENU
 
+# Spawn holes configuration
+NUM_SPAWN_HOLES = 4
+SPAWN_HOLE_RADIUS = 20
+spawn_holes = []
+
+L1 = {"character": "ants"}
+
+def create_spawn_holes():
+    """Create spawn holes in random locations around the edges"""
+    global spawn_holes
+    spawn_holes = []
+    
+    for _ in range(NUM_SPAWN_HOLES):
+        # Choose random edge (0=top, 1=right, 2=bottom, 3=left)
+        edge = random.randint(0, 3)
+        
+        if edge == 0:  # top edge
+            x = random.randint(SPAWN_HOLE_RADIUS * 2, WIDTH - SPAWN_HOLE_RADIUS * 2)
+            y = SPAWN_HOLE_RADIUS * 2
+        elif edge == 1:  # right edge
+            x = WIDTH - SPAWN_HOLE_RADIUS * 2
+            y = random.randint(SPAWN_HOLE_RADIUS * 2, HEIGHT - SPAWN_HOLE_RADIUS * 2)
+        elif edge == 2:  # bottom edge
+            x = random.randint(SPAWN_HOLE_RADIUS * 2, WIDTH - SPAWN_HOLE_RADIUS * 2)
+            y = HEIGHT - SPAWN_HOLE_RADIUS * 2
+        else:  # left edge
+            x = SPAWN_HOLE_RADIUS * 2
+            y = random.randint(SPAWN_HOLE_RADIUS * 2, HEIGHT - SPAWN_HOLE_RADIUS * 2)
+        
+        spawn_holes.append(pygame.Vector2(x, y))
+
+def spawn_ant_from_hole():
+    """Spawn an ant from a random spawn hole"""
+    if not spawn_holes:
+        create_spawn_holes()
+    
+    # Choose random spawn hole
+    hole_pos = random.choice(spawn_holes)
+    
+    # Spawn ant near the hole with smaller random offset
+    offset_range = SPAWN_HOLE_RADIUS // 2
+    offset_x = random.randint(-offset_range, offset_range)
+    offset_y = random.randint(-offset_range, offset_range)
+    
+    x = hole_pos.x + offset_x
+    y = hole_pos.y + offset_y
+    
+    # Ensure ant spawns within screen bounds with margin
+    margin = 15
+    x = max(margin, min(x, WIDTH - margin))
+    y = max(margin, min(y, HEIGHT - margin))
+    
+    return Boid(x, y)
+
+def draw_spawn_holes(screen):
+    """Draw the spawn holes as dark circles"""
+    for hole_pos in spawn_holes:
+        # Draw hole as dark brown/black circle
+        pygame.draw.circle(screen, (50, 30, 20), (int(hole_pos.x), int(hole_pos.y)), SPAWN_HOLE_RADIUS)
+        # Draw hole border
+        pygame.draw.circle(screen, (30, 20, 10), (int(hole_pos.x), int(hole_pos.y)), SPAWN_HOLE_RADIUS, 3)
+
 def render_UI(screen, boids):
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
     font = pygame.font.SysFont(None, 15)
@@ -46,101 +108,103 @@ def render_UI(screen, boids):
     c = 50
     d = 10
 
-    button_add_boids = pygame.Rect(a, b, c, d)  # Button to add boids
-    button_remove_boids = pygame.Rect(a+60, b, c, d)  # Button to remove boids
-    button_add_speed = pygame.Rect(a, b+20, c, d)  # Button to increase speed
-    button_remove_speed = pygame.Rect(a+60, b+20, c, d)
-    button_add_force = pygame.Rect(a, b+40, c, d)  # Button to increase force
-    button_remove_force = pygame.Rect(a+60, b+40, c, d)
-    button_add_neighbor_radius = pygame.Rect(a, b+60, c, d)
-    button_remove_neighbor_radius = pygame.Rect(a+60, b+60, c, d)
-    button_add_separation_radius = pygame.Rect(a, b+80, c, d)
-    button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
-    button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
-    button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
-    button_hatch_worker = pygame.Rect(a+60, b+240, c+40, d)
-    button_hatch_queen = pygame.Rect(a+60, b+260, c+40, d)
+    # button_add_boids = pygame.Rect(a, b, c, d)  # Button to add boids
+    # button_remove_boids = pygame.Rect(a+60, b, c, d)  # Button to remove boids
+    # button_add_speed = pygame.Rect(a, b+20, c, d)  # Button to increase speed
+    # button_remove_speed = pygame.Rect(a+60, b+20, c, d)
+    # button_add_force = pygame.Rect(a, b+40, c, d)  # Button to increase force
+    # button_remove_force = pygame.Rect(a+60, b+40, c, d)
+    # button_add_neighbor_radius = pygame.Rect(a, b+60, c, d)
+    # button_remove_neighbor_radius = pygame.Rect(a+60, b+60, c, d)
+    # button_add_separation_radius = pygame.Rect(a, b+80, c, d)
+    # button_remove_separation_radius = pygame.Rect(a+60, b+80, c, d)
+    # button_add_object_separation_radius = pygame.Rect(a, b+100, c, d)
+    # button_remove_object_separation_radius = pygame.Rect(a+60, b+100, c, d)
+    # button_hatch_worker = pygame.Rect(a+60, b+240, c+40, d)
+    # button_hatch_queen = pygame.Rect(a+60, b+260, c+40, d)
 
-    pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_speed)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_speed)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_force)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_force)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_neighbor_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_neighbor_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
-    pygame.draw.rect(screen, (255, 255, 255), button_hatch_worker)
-    pygame.draw.rect(screen, (255, 255, 255), button_hatch_queen)
+    # pygame.draw.rect(screen, (255, 255, 255), button_add_boids)
+    # pygame.draw.rect(screen, (255, 255, 255), button_remove_boids)
+    # pygame.draw.rect(screen, (255, 255, 255), button_add_speed)
+    # pygame.draw.rect(screen, (255, 255, 255), button_remove_speed)
+    # pygame.draw.rect(screen, (255, 255, 255), button_add_force)
+    # pygame.draw.rect(screen, (255, 255, 255), button_remove_force)
+    # pygame.draw.rect(screen, (255, 255, 255), button_add_neighbor_radius)
+    # pygame.draw.rect(screen, (255, 255, 255), button_remove_neighbor_radius)
+    # pygame.draw.rect(screen, (255, 255, 255), button_add_separation_radius)
+    # pygame.draw.rect(screen, (255, 255, 255), button_remove_separation_radius)
+    # pygame.draw.rect(screen, (255, 255, 255), button_add_object_separation_radius)
+    # pygame.draw.rect(screen, (255, 255, 255), button_remove_object_separation_radius)
+    # pygame.draw.rect(screen, (255, 255, 255), button_hatch_worker)
+    # pygame.draw.rect(screen, (255, 255, 255), button_hatch_queen)
 
-    for button, label in [
-            (button_add_boids, "+"),
-            (button_remove_boids, "-"),
-            (button_add_speed, "+"),
-            (button_remove_speed, "-"),
-            (button_add_force, "+"),
-            (button_remove_force, "-"),
-            (button_add_neighbor_radius, "+"),
-            (button_remove_neighbor_radius, "-"),
-            (button_add_separation_radius, "+"),
-            (button_remove_separation_radius, "-"),
-            (button_add_object_separation_radius, "+"),
-            (button_remove_object_separation_radius, "-")
-        ]:
-            text = font.render(label, True, (0, 0, 0))  # Black text
-            text_rect = text.get_rect(center=button.center)
-            screen.blit(text, text_rect)
+    # for button, label in [
+    #         (button_add_boids, "+"),
+    #         (button_remove_boids, "-"),
+    #         (button_add_speed, "+"),
+    #         (button_remove_speed, "-"),
+    #         (button_add_force, "+"),
+    #         (button_remove_force, "-"),
+    #         (button_add_neighbor_radius, "+"),
+    #         (button_remove_neighbor_radius, "-"),
+    #         (button_add_separation_radius, "+"),
+    #         (button_remove_separation_radius, "-"),
+    #         (button_add_object_separation_radius, "+"),
+    #         (button_remove_object_separation_radius, "-")
+    #     ]:
+    #         text = font.render(label, True, (0, 0, 0))  # Black text
+    #         text_rect = text.get_rect(center=button.center)
+    #         screen.blit(text, text_rect)
 
-    boid_count_text = font.render(f"LEVEL {LEVEL}", True, (255, 255, 255))  # White text
-    max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
-    max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
-    neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
-    separation_radius_text = font.render(f"Separation Radius: {SEPARATION_RADIUS}", True, (255, 255, 255))
-    width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
-    height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
-    object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
-    queens_text = font.render(f"Queens: {QUEENS}", True, (255, 255, 255))
-    larva_text = font.render(f"Larva: {LARVA}", True, (255, 255, 255))
-    food_text = font.render(f"Food: {FOOD}", True, (255, 255, 255))
-    worker_text = font.render(f"Workers: {len(boids)}", True, (255, 255, 255))
-    hatch_worker_text = font.render(f"Hatch Worker for 10 food and 1 larva", True, (255, 255, 255))
-    hatch_queen_text = font.render(f"Hatch Queen for 500 food and 10 larva", True, (255, 255, 255))
+    # boid_count_text = font.render(f"LEVEL {LEVEL}", True, (255, 255, 255))  # White text
+    # max_speed_text = font.render(f"Max Speed: {MAX_SPEED}", True, (255, 255, 255))
+    # max_force_text = font.render(f"Max Force: {round(MAX_FORCE, 2)}", True, (255, 255, 255))
+    # neighbor_radius_text = font.render(f"Neighbor Radius: {NEIGHBOR_RADIUS}", True, (255, 255, 255))
+    # separation_radius_text = font.render(f"Separation Radius: {SEPARATION_RADIUS}", True, (255, 255, 255))
+    # width_text = font.render(f"Window Width: {WIDTH}", True, (255, 255, 255))
+    # height_text = font.render(f"Window Height: {HEIGHT}", True, (255, 255, 255))
+    # object_separation_radius_text = font.render(f"Object Separation: {OBJECT_SEPERATION_RADIUS}", True, (255, 255, 255))
+    # queens_text = font.render(f"Queens: {QUEENS}", True, (255, 255, 255))
+    # larva_text = font.render(f"Larva: {LARVA}", True, (255, 255, 255))
+    # food_text = font.render(f"Food: {FOOD}", True, (255, 255, 255))
+    # worker_text = font.render(f"Workers: {len(boids)}", True, (255, 255, 255))
+    # hatch_worker_text = font.render(f"Hatch Worker for 10 food and 1 larva", True, (255, 255, 255))
+    # hatch_queen_text = font.render(f"Hatch Queen for 500 food and 10 larva", True, (255, 255, 255))
 
     # Draw it on screen at top-left
-    screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
-    screen.blit(max_speed_text, (10, 30))
-    screen.blit(max_force_text, (10, 50))
-    screen.blit(neighbor_radius_text, (10, 70))
-    screen.blit(separation_radius_text, (10, 90))
-    screen.blit(object_separation_radius_text, (10, 110))
-    screen.blit(width_text, (10, 130))
-    screen.blit(height_text, (10, 150))
-    screen.blit(queens_text, (10, 170))
-    screen.blit(larva_text, (10, 190))
-    screen.blit(food_text, (10, 210))
-    screen.blit(worker_text, (10, 230))
-    screen.blit(hatch_worker_text, (10, 250))
-    screen.blit(hatch_queen_text, (10, 270))
+    # screen.blit(boid_count_text, (10, 10))  # Position: (x=10, y=10)
+    # screen.blit(max_speed_text, (10, 30))
+    # screen.blit(max_force_text, (10, 50))
+    # screen.blit(neighbor_radius_text, (10, 70))
+    # screen.blit(separation_radius_text, (10, 90))
+    # screen.blit(object_separation_radius_text, (10, 110))
+    # screen.blit(width_text, (10, 130))
+    # screen.blit(height_text, (10, 150))
+    # screen.blit(queens_text, (10, 170))
+    # screen.blit(larva_text, (10, 190))
+    # screen.blit(food_text, (10, 210))
+    # screen.blit(worker_text, (10, 230))
+    # screen.blit(hatch_worker_text, (10, 250))
+    # screen.blit(hatch_queen_text, (10, 270))
 
-    return [
-        button_add_boids,
-        button_remove_boids,
-        button_add_speed,
-        button_remove_speed,
-        button_add_force,
-        button_remove_force,
-        button_add_neighbor_radius,
-        button_remove_neighbor_radius,
-        button_add_separation_radius,
-        button_remove_separation_radius,
-        button_add_object_separation_radius,
-        button_remove_object_separation_radius,
-        button_hatch_worker,
-        button_hatch_queen,
-    ]
+    # return [
+    #     button_add_boids,
+    #     button_remove_boids,
+    #     button_add_speed,
+    #     button_remove_speed,
+    #     button_add_force,
+    #     button_remove_force,
+    #     button_add_neighbor_radius,
+    #     button_remove_neighbor_radius,
+    #     button_add_separation_radius,
+    #     button_remove_separation_radius,
+    #     button_add_object_separation_radius,
+    #     button_remove_object_separation_radius,
+    #     button_hatch_worker,
+    #     button_hatch_queen,
+    # ]
+
+    return []
 
 # Declare mouse_held as a global variable
 mouse_held = False
@@ -150,20 +214,20 @@ def manage_UI(buttons, boids, movable_objects, splats):
     global WIDTH, HEIGHT, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, mouse_held, last_add_time, FOOD, LARVA, WORKERS, QUEENS
     dragging_object = False  # Flag to check if an object is being dragged
 
-    button_add_boids = buttons[0]
-    button_remove_boids = buttons[1]
-    button_add_speed = buttons[2]
-    button_remove_speed = buttons[3]
-    button_add_force = buttons[4]
-    button_remove_force = buttons[5]
-    button_add_neighbor_radius = buttons[6]
-    button_remove_neighbor_radius = buttons[7]
-    button_add_separation_radius = buttons[8]
-    button_remove_separation_radius = buttons[9]
-    button_add_object_separation_radius = buttons[10]
-    button_remove_object_separation_radius = buttons[11]
-    button_hatch_worker = buttons[12]
-    button_hatch_queen = buttons[13]
+    # button_add_boids = buttons[0]
+    # button_remove_boids = buttons[1]
+    # button_add_speed = buttons[2]
+    # button_remove_speed = buttons[3]
+    # button_add_force = buttons[4]
+    # button_remove_force = buttons[5]
+    # button_add_neighbor_radius = buttons[6]
+    # button_remove_neighbor_radius = buttons[7]
+    # button_add_separation_radius = buttons[8]
+    # button_remove_separation_radius = buttons[9]
+    # button_add_object_separation_radius = buttons[10]
+    # button_remove_object_separation_radius = buttons[11]
+    # button_hatch_worker = buttons[12]
+    # button_hatch_queen = buttons[13]
     
     dragging = False
     for event in pygame.event.get():
@@ -196,57 +260,57 @@ def manage_UI(buttons, boids, movable_objects, splats):
     current_time = pygame.time.get_ticks()
 
     # Check if the mouse is held and throttle actions
-    if not dragging and mouse_held and current_time - last_add_time > 50:  # 50ms delay
-        mouse_pos = pygame.mouse.get_pos()
+    # if not dragging and mouse_held and current_time - last_add_time > 50:  # 50ms delay
+    #     mouse_pos = pygame.mouse.get_pos()
 
-        if button_add_boids.collidepoint(mouse_pos):
-            new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-            boids.append(new_boid)
-        elif button_remove_boids.collidepoint(mouse_pos):
-            if boids:
-                boids.pop()
-        elif button_add_speed.collidepoint(mouse_pos):
-            MAX_SPEED += 1
-        elif button_remove_speed.collidepoint(mouse_pos):
-            if MAX_SPEED > 1:
-                MAX_SPEED -= 1
-        elif button_add_force.collidepoint(mouse_pos):
-            MAX_FORCE += 0.1
-        elif button_remove_force.collidepoint(mouse_pos):
-            if MAX_FORCE > 0.1:
-                MAX_FORCE -= 0.1
-        elif button_add_neighbor_radius.collidepoint(mouse_pos):
-            NEIGHBOR_RADIUS += 10
-        elif button_remove_neighbor_radius.collidepoint(mouse_pos):
-            if NEIGHBOR_RADIUS > 10:
-                NEIGHBOR_RADIUS -= 10
-        elif button_add_separation_radius.collidepoint(mouse_pos):
-            SEPARATION_RADIUS += 10
-        elif button_remove_separation_radius.collidepoint(mouse_pos):
-            if SEPARATION_RADIUS > 10:
-                SEPARATION_RADIUS -= 10
-        elif button_add_object_separation_radius.collidepoint(mouse_pos):
-            OBJECT_SEPERATION_RADIUS += 10
-        elif button_remove_object_separation_radius.collidepoint(mouse_pos):
-            if OBJECT_SEPERATION_RADIUS > 10:
-                OBJECT_SEPERATION_RADIUS -= 10
-        elif button_hatch_worker.collidepoint(mouse_pos):
-            if FOOD >= 10 and LARVA >= 1:
-                FOOD -= 10
-                LARVA -= 1
-                WORKERS += 1
-                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-                boids.append(new_boid)
-        elif button_hatch_queen.collidepoint(mouse_pos):
-            if FOOD >= 500 and LARVA >= 10:
-                FOOD -= 500
-                LARVA -= 10
-                QUEENS += 1
-                new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
-                boids.append(new_boid)
+    #     if button_add_boids.collidepoint(mouse_pos):
+    #         new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+    #         boids.append(new_boid)
+    #     elif button_remove_boids.collidepoint(mouse_pos):
+    #         if boids:
+    #             boids.pop()
+    #     elif button_add_speed.collidepoint(mouse_pos):
+    #         MAX_SPEED += 1
+    #     elif button_remove_speed.collidepoint(mouse_pos):
+    #         if MAX_SPEED > 1:
+    #             MAX_SPEED -= 1
+    #     elif button_add_force.collidepoint(mouse_pos):
+    #         MAX_FORCE += 0.1
+    #     elif button_remove_force.collidepoint(mouse_pos):
+    #         if MAX_FORCE > 0.1:
+    #             MAX_FORCE -= 0.1
+    #     elif button_add_neighbor_radius.collidepoint(mouse_pos):
+    #         NEIGHBOR_RADIUS += 10
+    #     elif button_remove_neighbor_radius.collidepoint(mouse_pos):
+    #         if NEIGHBOR_RADIUS > 10:
+    #             NEIGHBOR_RADIUS -= 10
+    #     elif button_add_separation_radius.collidepoint(mouse_pos):
+    #         SEPARATION_RADIUS += 10
+    #     elif button_remove_separation_radius.collidepoint(mouse_pos):
+    #         if SEPARATION_RADIUS > 10:
+    #             SEPARATION_RADIUS -= 10
+    #     elif button_add_object_separation_radius.collidepoint(mouse_pos):
+    #         OBJECT_SEPERATION_RADIUS += 10
+    #     elif button_remove_object_separation_radius.collidepoint(mouse_pos):
+    #         if OBJECT_SEPERATION_RADIUS > 10:
+    #             OBJECT_SEPERATION_RADIUS -= 10
+    #     elif button_hatch_worker.collidepoint(mouse_pos):
+    #         if FOOD >= 10 and LARVA >= 1:
+    #             FOOD -= 10
+    #             LARVA -= 1
+    #             WORKERS += 1
+    #             new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+    #             boids.append(new_boid)
+    #     elif button_hatch_queen.collidepoint(mouse_pos):
+    #         if FOOD >= 500 and LARVA >= 10:
+    #             FOOD -= 500
+    #             LARVA -= 10
+    #             QUEENS += 1
+    #             new_boid = Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT))
+    #             boids.append(new_boid)
 
-        # Update the last action time
-        last_add_time = current_time
+    #     # Update the last action time
+    #     last_add_time = current_time
 
     return True
 
@@ -348,8 +412,11 @@ async def run_kill_tutorial(screen, clock):
     """Kill tutorial - focus on stomping bugs"""
     global current_game_state
     
+    # Create spawn holes for tutorial
+    create_spawn_holes()
+    
     # Create fewer, slower bugs for tutorial
-    tutorial_boids = [Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(5)]
+    tutorial_boids = [spawn_ant_from_hole() for _ in range(5)]
     tutorial_kills = 0
     tutorial_splats = []
     
@@ -360,6 +427,25 @@ async def run_kill_tutorial(screen, clock):
         boot_image = pygame.transform.smoothscale(boot_image, (48, 48))
     except Exception:
         pass
+    
+    # Load tutorial illustration image
+    tutorial_image = None
+    try:
+        tutorial_image = pygame.image.load("kill_tutorial.png").convert_alpha()
+        # Scale to reasonable size for tutorial display
+        tutorial_image = pygame.transform.smoothscale(tutorial_image, (200, 150))
+    except Exception as e:
+        print(f"Error loading kill_tutorial.png: {e}")
+        tutorial_image = None
+    
+    # Load splat image
+    splat_image = None
+    try:
+        splat_image = pygame.image.load("splat.png").convert_alpha()
+        splat_image = pygame.transform.smoothscale(splat_image, (32, 32))
+    except Exception as e:
+        print(f"Error loading splat.png: {e}")
+        splat_image = None
     
     running = True
     while running and current_game_state == GAME_STATE_KILL_TUTORIAL:
@@ -383,7 +469,7 @@ async def run_kill_tutorial(screen, clock):
         
         # Spawn new bugs occasionally
         if len(tutorial_boids) < 3 and random.random() < 0.02:
-            tutorial_boids.append(Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)))
+            tutorial_boids.append(spawn_ant_from_hole())
         
         # Update bugs
         for boid in tutorial_boids:
@@ -396,6 +482,9 @@ async def run_kill_tutorial(screen, clock):
         # Draw everything
         screen.fill((0, 100, 0))  # Green background
         
+        # Draw spawn holes
+        draw_spawn_holes(screen)
+        
         # Draw tutorial text
         try:
             font = pygame.font.SysFont(None, 36)
@@ -407,8 +496,17 @@ async def run_kill_tutorial(screen, clock):
         title = font.render("KILL TUTORIAL", True, (255, 255, 255))
         screen.blit(title, (10, 10))
         
+        # Display tutorial image if available
+        if tutorial_image:
+            # Position image in top-right area
+            img_rect = tutorial_image.get_rect()
+            img_rect.topright = (WIDTH - 10, 50)
+            screen.blit(tutorial_image, img_rect)
+        
         instructions = [
-            "Click to stomp bugs!",
+            "Use your boot to stomp and kill bugs by clicking!",
+            "Click anywhere near a bug to eliminate it.",
+            "The boot follows your mouse cursor.",
             f"Kills: {tutorial_kills}",
             "Press ESC to return to menu"
         ]
@@ -423,7 +521,11 @@ async def run_kill_tutorial(screen, clock):
         
         # Draw splats
         for splat in tutorial_splats:
-            pygame.draw.circle(screen, (150, 0, 0), (int(splat['pos'].x), int(splat['pos'].y)), 8)
+            if splat_image:
+                rect = splat_image.get_rect(center=(int(splat['pos'].x), int(splat['pos'].y)))
+                screen.blit(splat_image, rect)
+            else:
+                pygame.draw.circle(screen, (150, 0, 0), (int(splat['pos'].x), int(splat['pos'].y)), 8)
         
         # Draw boot cursor
         mouse_pos = pygame.mouse.get_pos()
@@ -442,8 +544,11 @@ async def run_dont_die_tutorial(screen, clock):
     """Don't die tutorial - focus on protecting food"""
     global current_game_state
     
+    # Create spawn holes for tutorial
+    create_spawn_holes()
+    
     # Create tutorial setup with food to protect
-    tutorial_boids = [Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(3)]
+    tutorial_boids = [spawn_ant_from_hole() for _ in range(3)]
     tutorial_food = [FoodObject(WIDTH//2 + 100, HEIGHT//2)]  # One food object to protect
     tutorial_kills = 0
     tutorial_splats = []
@@ -458,6 +563,15 @@ async def run_dont_die_tutorial(screen, clock):
         boot_image = pygame.transform.smoothscale(boot_image, (48, 48))
     except Exception:
         pass
+    
+    # Load splat image
+    splat_image = None
+    try:
+        splat_image = pygame.image.load("splat.png").convert_alpha()
+        splat_image = pygame.transform.smoothscale(splat_image, (32, 32))
+    except Exception as e:
+        print(f"Error loading splat.png: {e}")
+        splat_image = None
     
     running = True
     while running and current_game_state == GAME_STATE_DONT_DIE_TUTORIAL:
@@ -481,7 +595,7 @@ async def run_dont_die_tutorial(screen, clock):
         
         # Spawn new bugs occasionally
         if len(tutorial_boids) < 5:
-            tutorial_boids.append(Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)))
+            tutorial_boids.append(spawn_ant_from_hole())
         
         # Update bugs and food
         target_position = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
@@ -513,6 +627,9 @@ async def run_dont_die_tutorial(screen, clock):
         
         # Draw everything
         screen.fill((0, 100, 0))  # Green background
+        
+        # Draw spawn holes
+        draw_spawn_holes(screen)
         
         # Draw base circle
         pygame.draw.circle(screen, (0, 0, 0), (WIDTH // 2, HEIGHT // 2), 40)
@@ -550,7 +667,11 @@ async def run_dont_die_tutorial(screen, clock):
         
         # Draw splats
         for splat in tutorial_splats:
-            pygame.draw.circle(screen, (150, 0, 0), (int(splat['pos'].x), int(splat['pos'].y)), 8)
+            if splat_image:
+                rect = splat_image.get_rect(center=(int(splat['pos'].x), int(splat['pos'].y)))
+                screen.blit(splat_image, rect)
+            else:
+                pygame.draw.circle(screen, (150, 0, 0), (int(splat['pos'].x), int(splat['pos'].y)), 8)
         
         # Draw boot cursor
         mouse_pos = pygame.mouse.get_pos()
@@ -645,23 +766,29 @@ class Boid:
         if pygame.time.get_ticks() - self.signal_time > 100:
             self.color = (255, 255, 255)
 
-        # Screen bouncing
-        if self.position.x <= 0 or self.position.x >= WIDTH:
-            self.velocity.x *= -1
-            # Clamp inside bounds
-            self.position.x = max(0, min(self.position.x, WIDTH))
-
-        if self.position.y <= 0 or self.position.y >= HEIGHT:
-            self.velocity.y *= -1
-            # Clamp inside bounds
-            self.position.y = max(0, min(self.position.y, HEIGHT))
+        # Keep boids within screen bounds with bouncing
+        margin = 10  # Small margin from edges
         
+        if self.position.x <= margin:
+            self.position.x = margin
+            self.velocity.x = abs(self.velocity.x)  # Bounce right
+        elif self.position.x >= WIDTH - margin:
+            self.position.x = WIDTH - margin
+            self.velocity.x = -abs(self.velocity.x)  # Bounce left
+            
+        if self.position.y <= margin:
+            self.position.y = margin
+            self.velocity.y = abs(self.velocity.y)  # Bounce down
+        elif self.position.y >= HEIGHT - margin:
+            self.position.y = HEIGHT - margin
+            self.velocity.y = -abs(self.velocity.y)  # Bounce up
+        
+        # Handle block collisions
         for block in blocks:
             block_rect = block.get_rect()
-            boid_rect = pygame.Rect(self.position.x, self.position.y, 5, 5)  # A small rect for collision
+            boid_rect = pygame.Rect(self.position.x - 5, self.position.y - 5, 10, 10)
             if boid_rect.colliderect(block_rect):
                 # Simple bounce: reverse direction
-                # You can get fancier with angle of incidence/reflection later
                 if block_rect.left <= self.position.x <= block_rect.right:
                     self.velocity.y *= -1
                 if block_rect.top <= self.position.y <= block_rect.bottom:
@@ -899,11 +1026,14 @@ async def run_main_game(screen, clock):
     """Run the original main game"""
     global current_game_state
     
+    # Create spawn holes for main game
+    create_spawn_holes()
+    
     last_add_time = pygame.time.get_ticks()
     init_goal_time = pygame.time.get_ticks()
 
-    # Create boids
-    boids = [Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)) for _ in range(NUM_BOIDS)]
+    # Create boids from spawn holes
+    boids = [spawn_ant_from_hole() for _ in range(NUM_BOIDS)]
     movable_object_1 = FoodObject(random.randint(0, WIDTH), random.randint(0, HEIGHT))
     movable_object_2 = FoodObject(random.randint(0, WIDTH), random.randint(0, HEIGHT))
     movable_object_3 = FoodObject(random.randint(0, WIDTH), random.randint(0, HEIGHT))
@@ -951,9 +1081,12 @@ async def run_main_game(screen, clock):
         screen.fill((0, 100, 0))  # RGB for dark green
 
         # Draw a black filled circle in the middle of the screen as the base
-        base_center = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
-        base_radius = 40
-        pygame.draw.circle(screen, (0, 0, 0), base_center, base_radius)  # filled black # Draw base
+        #base_center = pygame.Vector2(WIDTH // 2, HEIGHT // 2)
+        #base_radius = 40
+        #pygame.draw.circle(screen, (0, 0, 0), base_center, base_radius)  # filled black # Draw base
+        
+        # Draw spawn holes
+        draw_spawn_holes(screen)
         
         buttons = render_UI(screen, boids)
         running = manage_UI(buttons, boids, objects, splats)
@@ -996,7 +1129,7 @@ async def run_main_game(screen, clock):
         # Spawn one ant every second during level one
         if not success_displayed and elapsed < timer_duration:
             if now - ant_spawn_timer >= 1000:
-                boids.append(Boid(random.randint(0, WIDTH), random.randint(0, HEIGHT)))
+                boids.append(spawn_ant_from_hole())
                 ant_spawn_timer = now
 
         # Draw timer at top center
