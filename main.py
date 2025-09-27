@@ -7,7 +7,7 @@ import random, math, os
 import pygame
 
 # Screen dimensions
-WIDTH, HEIGHT = 1000, 1000
+WIDTH, HEIGHT = 700, 700
 # Boid settings
 NUM_BOIDS = 10
 MAX_SPEED = 5
@@ -29,6 +29,7 @@ FOOD = 0
 KILLS = 0
 BOOT_EQUIPPED = False
 LEVEL = 1
+SPAWN_INTERVALS = 1000
 
 # Game states
 GAME_STATE_SPLASH = "splash"
@@ -978,7 +979,7 @@ async def main():
 
 async def run_main_game(screen, clock):
     """Run the original main game"""
-    global current_game_state
+    global current_game_state, LEVEL, MAX_SPEED, SPAWN_INTEVALS
     
     # Create spawn holes for main game
     create_spawn_holes()
@@ -1025,8 +1026,9 @@ async def run_main_game(screen, clock):
     start_time = pygame.time.get_ticks()
     timer_duration = 30000  # 30 seconds in milliseconds
     success_displayed = False
+    success_display_time = None  # Track when success screen started showing
 
-    exit_status = "loss"
+    exit_status = "success"
 
     final_points = None
     final_food_health = 60
@@ -1035,128 +1037,161 @@ async def run_main_game(screen, clock):
     ant_spawn_timer = pygame.time.get_ticks()
     running = True
     while running:
-        screen.fill((0, 100, 0))  # RGB for dark green
 
-        # Draw a black filled circle in the middle of the screen as the base
+        # Handle events first
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "menu"
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return "menu"
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.Vector2(event.pos)
+                boids_to_remove = [boid for boid in boids if boid.position.distance_to(mouse_pos) < 30]
+                global KILLS
+                KILLS += len(boids_to_remove)
+                for boid in boids_to_remove:
+                    boid.die(boids, splats)
+
+        screen.fill((0, 100, 0))  # RGB for dark green
+        
         # Draw spawn holes
         draw_spawn_holes(screen)
         
-        buttons = render_UI(screen, boids)
-        running = manage_UI(buttons, boids, objects, splats)
-
-        # Draw splats and remove after 2 seconds
         now = pygame.time.get_ticks()
+        # Spawn one ant every second during level one
+        global SPAWN_INTERVALS
+        if not success_displayed and now - ant_spawn_timer >= SPAWN_INTERVALS:
+            boids.append(spawn_ant_from_hole())
+            ant_spawn_timer = now
+
+        # Timer logic
+        elapsed = now - start_time
+        time_left = max(0, (timer_duration - elapsed) // 1000)
+
+        # Check for loss condition FIRST
+        food_objects = [obj for obj in objects if isinstance(obj, FoodObject)]
+        final_food_health = sum(obj.health for obj in food_objects)
+        
+        if final_food_health <= 0 and not success_displayed:
+            print("YOU LOST!")
+            exit_status = "loss"
+            success_displayed = True
+            success_display_time = now  # Start the 3-second timer
+            boids.clear()
+            objects.clear()
+            final_ants_killed = KILLS if 'KILLS' in globals() else 0
+            final_points = final_ants_killed * 5
+
+        # Check for success
+        elif elapsed >= timer_duration and not success_displayed:
+            print("LEVEL COMPLETE!")
+            exit_status = "success"
+            success_displayed = True
+            success_display_time = now  # Start the 3-second timer
+            final_ants_killed = KILLS if 'KILLS' in globals() else 0
+            final_points = final_food_health * 10 + final_ants_killed * 5
+            boids.clear()
+            objects.clear()
+            
+            # Level progression
+            global MAX_FORCE, LEVEL, OBJECT_PUSH_FORCE, ATTRACTION_RADIUS
+            MAX_FORCE += 1
+            LEVEL += 1
+            MAX_SPEED *= 1.5
+            SPAWN_INTERVALS *= 0.5  # Faster spawning, minimum 0.5 seconds
+            OBJECT_PUSH_FORCE += 0.1
+            ATTRACTION_RADIUS += 20
+
+        # Auto-advance after 3 seconds
+        if success_displayed and success_display_time:
+            time_since_success = now - success_display_time
+            if time_since_success >= 3000:  # 3 seconds
+                if exit_status == "success":
+                    # Reset KILLS for next level
+                    KILLS = 0
+                    # Start next level by recursively calling run_main_game
+                    return await run_main_game(screen, clock)
+                else:
+                    # Lost - return to menu
+                    return "menu"
+
+        # Only update game objects if not finished
+        if not success_displayed:
+            # Update boids
+            for boid in boids:
+                boid.scatter(boids, blocks, objects, target_position)
+                boid.update(blocks, WIDTH, HEIGHT)
+                boid.resolve_collision_with_ball(objects)
+                boid.has_received = False
+
+            # Update food objects (ONLY ONCE!)
+            objects[:] = [obj for obj in objects if not (isinstance(obj, FoodObject) and obj.health <= 0)]
+            for obj in objects:
+                obj.update(target_position, boids)
+
+        # Draw everything
+        for boid in boids:
+            boid.draw(screen)
+
+        for obj in objects:
+            obj.draw(screen)
+
+        # Draw splats
         splats[:] = [s for s in splats if now - s['time'] < 2000]
         for s in splats:
             if splat_img:
                 rect = splat_img.get_rect(center=(s['pos'].x, s['pos'].y))
                 screen.blit(splat_img, rect)
 
-        # Update and draw boids
-        for boid in boids:
-            boid.scatter(boids, blocks, objects, target_position)
-            boid.update(blocks, WIDTH, HEIGHT)
-            boid.resolve_collision_with_ball(objects)
-            boid.draw(screen)
-            boid.has_received = False
-
-        for block in blocks:
-            block.draw(screen)
-        
-        # Update and draw objects (food)
-        objects[:] = [obj for obj in objects if not (isinstance(obj, FoodObject) and obj.health <= 0)]
-        for obj in objects:
-            obj.update(target_position, boids)
-            obj.draw(screen)
-        
+        # Draw boot cursor
         mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
         if boot_image:
             rect = boot_image.get_rect(center=(mouse_pos.x, mouse_pos.y))
             screen.blit(boot_image, rect)
 
-        # Timer logic
-        now = pygame.time.get_ticks()
-        elapsed = now - start_time
-        time_left = max(0, (timer_duration - elapsed) // 1000)
-
-        # Spawn one ant every second during level one
-        if not success_displayed and elapsed < timer_duration:
-            if now - ant_spawn_timer >= 1000:
-                boids.append(spawn_ant_from_hole())
-                ant_spawn_timer = now
-
-        # Draw timer at top center
+        # Draw timer
         font = pygame.font.SysFont(None, 48)
         timer_text = font.render(f"Time Left: {time_left}s", True, (255, 255, 255))
         screen.blit(timer_text, (WIDTH // 2 - timer_text.get_width() // 2, 20))
 
-        food_objects = [obj for obj in objects if isinstance(obj, FoodObject)]
+        # Draw level info
+        level_text = font.render(f"Level {LEVEL}", True, (255, 255, 255))
+        screen.blit(level_text, (10, 10))
 
-        if final_food_health == 0:
-            exit_status = "loss"
-            success_displayed = True
-            boids.clear()
-            objects.clear()
-            final_ants_killed = KILLS if 'KILLS' in globals() else 0
-            final_points = final_food_health * 10 + final_ants_killed * 5
-
-        # Check for success
-        if elapsed >= timer_duration and not success_displayed:
-            if food_objects:
-                exit_status = "success"
-                success_text = font.render("Success!", True, (0, 255, 0))
-                screen.blit(success_text, (WIDTH // 2 - success_text.get_width() // 2, HEIGHT // 2 - 24))
-                # Calculate points
-                final_food_health = sum(obj.health for obj in food_objects)
-                final_ants_killed = KILLS if 'KILLS' in globals() else 0
-                final_points = final_food_health * 10 + final_ants_killed * 5
-                success_displayed = True
-                # Clear all ants and food objects
-                boids.clear()
-                objects.clear()
-
-        # Optionally, stop updating everything after level ends
+        # Draw end game messages
         if success_displayed:
             if exit_status == "loss":
-                complete_text = font.render("Level 1 Failed :(", True, (255, 255, 0))
+                LEVEL = 1  # Reset level on loss
+                complete_text = font.render("Level Failed :(", True, (255, 100, 100))
+                sub_text = font.render("Returning to menu...", True, (200, 200, 200))
             else:
-                # Draw "Level Complete" message
-                complete_text = font.render("Level 1 Complete!", True, (255, 255, 0))
+                complete_text = font.render(f"Level {LEVEL-1} Complete!", True, (100, 255, 100))
+                sub_text = font.render(f"Starting Level {LEVEL}...", True, (200, 200, 200))
+
             screen.blit(complete_text, (WIDTH // 2 - complete_text.get_width() // 2, HEIGHT // 2 + 40))
-            # Show points summary
+            screen.blit(sub_text, (WIDTH // 2 - sub_text.get_width() // 2, HEIGHT // 2 + 90))
+            
             points_text = font.render(f"Points: {final_points}", True, (0, 200, 255))
-            screen.blit(points_text, (WIDTH // 2 - points_text.get_width() // 2, HEIGHT // 2 + 90))
-            health_text = font.render(f"Food Health Left: {final_food_health}", True, (0, 255, 0))
-            screen.blit(health_text, (WIDTH // 2 - health_text.get_width() // 2, HEIGHT // 2 + 130))
-            ants_text = font.render(f"Ants Killed: {final_ants_killed}", True, (255, 0, 0))
-            screen.blit(ants_text, (WIDTH // 2 - ants_text.get_width() // 2, HEIGHT // 2 + 170))
-        else:
-            # Normal update/draw code for boids and objects
-            for boid in boids:
-                boid.scatter(boids, blocks, objects, target_position)
-                boid.update(blocks, WIDTH, HEIGHT)
-                boid.resolve_collision_with_ball(objects)
-                boid.draw(screen)
-                boid.has_received = False
-
-            for block in blocks:
-                block.draw(screen)
-
-            objects[:] = [obj for obj in objects if not (isinstance(obj, FoodObject) and obj.health <= 0)]
-            for obj in objects:
-                obj.update(target_position, boids)
-                obj.draw(screen)
-
-        final_food_health = sum(obj.health for obj in food_objects)
+            screen.blit(points_text, (WIDTH // 2 - points_text.get_width() // 2, HEIGHT // 2 + 140))
+            
+            ants_text = font.render(f"Ants Killed: {final_ants_killed}", True, (0, 200, 255))
+            screen.blit(ants_text, (WIDTH // 2 - ants_text.get_width() // 2, HEIGHT // 2 + 190))
+            
+            food_text = font.render(f"Food Health: {final_food_health}", True, (0, 200, 255))
+            screen.blit(food_text, (WIDTH // 2 - food_text.get_width() // 2, HEIGHT // 2 + 240))
+            
+            # Show countdown
+            if success_display_time:
+                countdown = max(0, 3 - ((now - success_display_time) // 1000))
+                countdown_text = font.render(f"Next in: {countdown}s", True, (255, 255, 0))
+                screen.blit(countdown_text, (WIDTH // 2 - countdown_text.get_width() // 2, HEIGHT // 2 + 290))
 
         pygame.display.flip()
         clock.tick(30)
-
-        # CRITICAL for pygbag/browser:
         await asyncio.sleep(0)
 
-
-    pygame.quit()
+    return "menu"
 
 if __name__ == "__main__":
     asyncio.run(main())
