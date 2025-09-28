@@ -1037,7 +1037,7 @@ async def run_main_game(screen, clock):
     one_second_ticker = pygame.time.get_ticks()
 
     start_time = pygame.time.get_ticks()
-    timer_duration = 3000  # 30 seconds in milliseconds
+    timer_duration = 30000  # 30 seconds in milliseconds
     success_displayed = False
     success_display_time = None  # Track when success screen started showing
 
