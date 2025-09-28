@@ -55,12 +55,12 @@ UPGRADE_DISPLAY_DURATION = 3000  # 3 seconds
 # Shoe data: size, stomp_radius, kills_required, description
 SHOES = {
     "tiny": {"size": 24, "stomp_radius": 20, "kills_required": 0, "description": "Tiny boot - starter shoe"},
-    "small": {"size": 32, "stomp_radius": 25, "kills_required": 25, "description": "Small boot - basic range"},
-    "medium": {"size": 48, "stomp_radius": 35, "kills_required": 75, "description": "Medium boot - decent reach"},
-    "large": {"size": 64, "stomp_radius": 50, "kills_required": 150, "description": "Large boot - good coverage"},
-    "xl": {"size": 80, "stomp_radius": 65, "kills_required": 300, "description": "XL boot - wide destruction"},
-    "giant": {"size": 96, "stomp_radius": 80, "kills_required": 500, "description": "Giant boot - massive impact"},
-    "mega": {"size": 128, "stomp_radius": 100, "kills_required": 1000, "description": "MEGA BOOT - ultimate power!"}
+    "small": {"size": 32, "stomp_radius": 25, "kills_required": 50, "description": "Small boot - basic range"},
+    "medium": {"size": 48, "stomp_radius": 35, "kills_required": 100, "description": "Medium boot - decent reach"},
+    "large": {"size": 64, "stomp_radius": 50, "kills_required": 300, "description": "Large boot - good coverage"},
+    "xl": {"size": 80, "stomp_radius": 65, "kills_required": 500, "description": "XL boot - wide destruction"},
+    "giant": {"size": 96, "stomp_radius": 80, "kills_required": 1000, "description": "Giant boot - massive impact"},
+    "mega": {"size": 128, "stomp_radius": 100, "kills_required": 2500, "description": "MEGA BOOT - ultimate power!"}
 }
 
 OWNED_SHOES = {"tiny"}  # Shoes the player owns
@@ -310,7 +310,7 @@ def load_boot_image():
 
 def add_kill():
     """Add a kill to the total count and check for automatic upgrades"""
-    global TOTAL_KILLS, CURRENT_SHOE, OWNED_SHOES, UPGRADE_NOTIFICATION
+    global TOTAL_KILLS, CURRENT_SHOE, OWNED_SHOES, UPGRADE_NOTIFICATION, BOOT_EQUIPPED
     TOTAL_KILLS += 1
     print(f"Kill! Total: {TOTAL_KILLS}")
     
@@ -1319,8 +1319,9 @@ async def main():
 
 async def run_main_game(screen, clock):
     """Run the original main game"""
-    global current_game_state, LEVEL, MAX_SPEED, SPAWN_INTEVALS, DEFINITE_FOOD_HEALTH
-    
+    global current_game_state, LEVEL, MAX_SPEED, SPAWN_INTERVALS, DEFINITE_FOOD_HEALTH, NUM_BOIDS, MAX_FORCE, OBJECT_PUSH_FORCE, ATTRACTION_RADIUS, KILLS, MAX_ANTS
+    global NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, TRIANGLE_SIZE, OBJECTS_IN_GOAL, BROADCAST_RADIUS, TARGET_HOLD_TIME, target_start_time
+
     # Create spawn holes for main game
     create_spawn_holes()
     
@@ -1436,7 +1437,6 @@ async def run_main_game(screen, clock):
             objects.clear()
             
             # Level progression
-            global MAX_FORCE, LEVEL, OBJECT_PUSH_FORCE, ATTRACTION_RADIUS
             MAX_FORCE += 0.5
             LEVEL += 1
             MAX_SPEED = min(MAX_SPEED * 1.25, 20)  # Cap max speed at 20
@@ -1447,7 +1447,7 @@ async def run_main_game(screen, clock):
         # Auto-advance after 5 seconds
         if success_displayed and success_display_time:
             time_since_success = now - success_display_time
-            if time_since_success >= 5000:  # 5 seconds
+            if time_since_success >= 10000:  # 10 seconds
                 if exit_status == "success":
                     # Reset KILLS for next level
                     KILLS = 0
@@ -1461,6 +1461,19 @@ async def run_main_game(screen, clock):
         if success_displayed:
             if exit_status == "loss":
                 LEVEL = 1  # Reset level on loss
+                NUM_BOIDS = 10
+                MAX_SPEED = 5
+                MAX_FORCE = 1
+                OBJECT_PUSH_FORCE = 0.2
+                NEIGHBOR_RADIUS = 300
+                SEPARATION_RADIUS = 10
+                OBJECT_SEPERATION_RADIUS = 50
+                TRIANGLE_SIZE = 5
+                ATTRACTION_RADIUS = 100
+                OBJECTS_IN_GOAL = False  # Flag to check if all objects are in the goal
+                BROADCAST_RADIUS = 100
+                TARGET_HOLD_TIME = 3000  # 3 seconds in milliseconds
+                target_start_time = None  # Tracks when all objects entered the target
                 complete_text = font.render("Level Failed :(", True, (255, 100, 100))
                 sub_text = font.render("Returning to menu...", True, (200, 200, 200))
             else:
@@ -1485,7 +1498,7 @@ async def run_main_game(screen, clock):
 
             # Show countdown
             if success_display_time:
-                countdown = max(0, 3 - ((now - success_display_time) // 1000))
+                countdown = max(0, 10 - ((now - success_display_time) // 1000))
                 countdown_text = font.render(f"Next in: {countdown}s", True, (255, 255, 0))
                 screen.blit(countdown_text, (WIDTH // 2 - countdown_text.get_width() // 2, HEIGHT // 2 + 290))
 
