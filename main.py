@@ -31,14 +31,35 @@ BOOT_EQUIPPED = False
 LEVEL = 1
 SPAWN_INTERVALS = 1000
 MAX_ANTS = 400
+DEFINITE_FOOD_HEALTH = 60  # Track food health across levels
 
 # Game states
 GAME_STATE_SPLASH = "splash"
 GAME_STATE_MENU = "menu"
+GAME_STATE_SHOP = "shop"
 GAME_STATE_KILL_TUTORIAL = "kill_tutorial"
 GAME_STATE_DONT_DIE_TUTORIAL = "dont_die_tutorial"
 GAME_STATE_MAIN_GAME = "main_game"
 current_game_state = GAME_STATE_SPLASH
+
+# Shop and shoe system
+TOTAL_KILLS = 0  # Total ants killed across all games
+CURRENT_SHOE = "tiny"  # Current equipped shoe
+UPGRADE_NOTIFICATION = None  # {"text": str, "time": int} for showing upgrades
+UPGRADE_DISPLAY_DURATION = 3000  # 3 seconds
+
+# Shoe data: size, stomp_radius, kills_required, description
+SHOES = {
+    "tiny": {"size": 24, "stomp_radius": 20, "kills_required": 0, "description": "Tiny boot - starter shoe"},
+    "small": {"size": 32, "stomp_radius": 25, "kills_required": 25, "description": "Small boot - basic range"},
+    "medium": {"size": 48, "stomp_radius": 35, "kills_required": 75, "description": "Medium boot - decent reach"},
+    "large": {"size": 64, "stomp_radius": 50, "kills_required": 150, "description": "Large boot - good coverage"},
+    "xl": {"size": 80, "stomp_radius": 65, "kills_required": 300, "description": "XL boot - wide destruction"},
+    "giant": {"size": 96, "stomp_radius": 80, "kills_required": 500, "description": "Giant boot - massive impact"},
+    "mega": {"size": 128, "stomp_radius": 100, "kills_required": 1000, "description": "MEGA BOOT - ultimate power!"}
+}
+
+OWNED_SHOES = {"tiny"}  # Shoes the player owns
 
 # Splash screen settings
 SPLASH_DISPLAY_TIME = 2000  # 2 seconds in milliseconds
@@ -179,7 +200,227 @@ def draw_spawn_holes(screen):
         # Draw hole border
         pygame.draw.circle(screen, (30, 20, 10), (int(hole_pos.x), int(hole_pos.y)), SPAWN_HOLE_RADIUS, 3)
 
-def render_UI(screen, boids):
+def draw_upgrade_notification(screen):
+    """Draw upgrade notification if active"""
+    global UPGRADE_NOTIFICATION
+    
+    if UPGRADE_NOTIFICATION is None:
+        return
+    
+    current_time = pygame.time.get_ticks()
+    elapsed = current_time - UPGRADE_NOTIFICATION["time"]
+    
+    # Remove notification after display duration
+    if elapsed > UPGRADE_DISPLAY_DURATION:
+        UPGRADE_NOTIFICATION = None
+        return
+    
+    # Create notification box
+    try:
+        font = pygame.font.SysFont(None, 48)
+        small_font = pygame.font.SysFont(None, 32)
+    except Exception:
+        font = pygame.font.Font(None, 48)
+        small_font = pygame.font.Font(None, 32)
+    
+    # Calculate fade effect
+    fade_progress = min(1.0, elapsed / 500)  # Fade in over 0.5 seconds
+    if elapsed > UPGRADE_DISPLAY_DURATION - 500:  # Fade out in last 0.5 seconds
+        fade_progress = (UPGRADE_DISPLAY_DURATION - elapsed) / 500
+    
+    alpha = int(255 * fade_progress)
+    
+    # Create notification surface
+    notification_text = font.render(UPGRADE_NOTIFICATION["text"], True, (255, 255, 0))
+    subtitle_text = small_font.render("Stomp radius increased!", True, (255, 200, 0))
+    
+    # Background box
+    box_width = max(notification_text.get_width(), subtitle_text.get_width()) + 40
+    box_height = notification_text.get_height() + subtitle_text.get_height() + 30
+    box_x = (WIDTH - box_width) // 2
+    box_y = 150
+    
+    # Create surface with per-pixel alpha
+    notification_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+    notification_surface.fill((0, 0, 0, min(180, alpha)))  # Semi-transparent black background
+    
+    # Add border
+    pygame.draw.rect(notification_surface, (255, 255, 0, alpha), (0, 0, box_width, box_height), 3)
+    
+    # Add text
+    notification_text.set_alpha(alpha)
+    subtitle_text.set_alpha(alpha)
+    
+    text_x = (box_width - notification_text.get_width()) // 2
+    text_y = 10
+    notification_surface.blit(notification_text, (text_x, text_y))
+    
+    subtitle_x = (box_width - subtitle_text.get_width()) // 2
+    subtitle_y = text_y + notification_text.get_height() + 5
+    notification_surface.blit(subtitle_text, (subtitle_x, subtitle_y))
+    
+    screen.blit(notification_surface, (box_x, box_y))
+
+def get_current_stomp_radius():
+    """Get the stomp radius of the currently equipped shoe"""
+    return SHOES[CURRENT_SHOE]["stomp_radius"]
+
+def add_kill():
+    """Add a kill to the total count and check for automatic upgrades"""
+    global TOTAL_KILLS, CURRENT_SHOE, OWNED_SHOES, UPGRADE_NOTIFICATION
+    TOTAL_KILLS += 1
+    print(f"Kill! Total: {TOTAL_KILLS}")
+    
+    # Check for automatic upgrades
+    for shoe_name, shoe_data in SHOES.items():
+        if (TOTAL_KILLS >= shoe_data["kills_required"] and 
+            shoe_name not in OWNED_SHOES):
+            # Auto-unlock and equip the new shoe
+            OWNED_SHOES.add(shoe_name)
+            CURRENT_SHOE = shoe_name
+            
+            # Set upgrade notification
+            UPGRADE_NOTIFICATION = {
+                "text": f"UPGRADE! {shoe_name.title()} Boot Unlocked!",
+                "time": pygame.time.get_ticks()
+            }
+            
+            print(f"🎉 UPGRADE! Unlocked {shoe_name.title()} Boot! (Stomp radius: {shoe_data['stomp_radius']}px)")
+            break  # Only upgrade one shoe at a time
+
+def draw_shop(screen):
+    """Draw the shop interface"""
+    screen.fill((40, 20, 60))  # Purple background
+    
+    try:
+        title_font = pygame.font.SysFont(None, 72)
+        button_font = pygame.font.SysFont(None, 28)
+        small_font = pygame.font.SysFont(None, 20)
+    except Exception:
+        title_font = pygame.font.Font(None, 72)
+        button_font = pygame.font.Font(None, 28)
+        small_font = pygame.font.Font(None, 20)
+    
+    # Title
+    title_text = title_font.render("BOOT SHOP", True, (255, 255, 255))
+    title_rect = title_text.get_rect(center=(WIDTH // 2, 60))
+    screen.blit(title_text, title_rect)
+    
+    # Total kills display
+    kills_text = button_font.render(f"Total Kills: {TOTAL_KILLS}", True, (255, 255, 0))
+    screen.blit(kills_text, (20, 20))
+    
+    # Current shoe display
+    current_text = button_font.render(f"Current: {CURRENT_SHOE.title()} Boot", True, (100, 255, 100))
+    screen.blit(current_text, (20, 50))
+    
+    # Shop items
+    start_y = 120
+    item_height = 70
+    buttons = []
+    
+    for i, (shoe_name, shoe_data) in enumerate(SHOES.items()):
+        y = start_y + i * item_height
+        
+        # Item background
+        item_rect = pygame.Rect(50, y, WIDTH - 100, item_height - 10)
+        
+        # Color based on ownership/availability
+        if shoe_name in OWNED_SHOES:
+            if shoe_name == CURRENT_SHOE:
+                bg_color = (50, 100, 50)  # Green for equipped
+                border_color = (100, 255, 100)
+            else:
+                bg_color = (100, 100, 50)  # Yellow for owned
+                border_color = (255, 255, 100)
+        elif TOTAL_KILLS >= shoe_data["kills_required"]:
+            bg_color = (50, 50, 100)  # Blue for unlocked
+            border_color = (100, 100, 255)
+        else:
+            bg_color = (100, 50, 50)  # Red for locked
+            border_color = (255, 100, 100)
+        
+        pygame.draw.rect(screen, bg_color, item_rect)
+        pygame.draw.rect(screen, border_color, item_rect, 3)
+        
+        # Boot preview (simple circle representation)
+        boot_center = (item_rect.left + 40, item_rect.centery)
+        boot_radius = min(shoe_data["size"] // 4, 25)  # Scale down for display
+        pygame.draw.circle(screen, (139, 69, 19), boot_center, boot_radius)
+        pygame.draw.circle(screen, (160, 82, 45), boot_center, boot_radius, 2)
+        
+        # Shoe info
+        name_text = button_font.render(shoe_name.title() + " Boot", True, (255, 255, 255))
+        screen.blit(name_text, (item_rect.left + 90, y + 5))
+        
+        desc_text = small_font.render(shoe_data["description"], True, (200, 200, 200))
+        screen.blit(desc_text, (item_rect.left + 90, y + 25))
+        
+        radius_text = small_font.render(f"Stomp Radius: {shoe_data['stomp_radius']}px", True, (200, 200, 200))
+        screen.blit(radius_text, (item_rect.left + 90, y + 45))
+        
+        # Status/Requirement
+        if shoe_name in OWNED_SHOES:
+            if shoe_name == CURRENT_SHOE:
+                status_text = button_font.render("EQUIPPED", True, (100, 255, 100))
+            else:
+                status_text = button_font.render("EQUIP", True, (255, 255, 100))
+        elif TOTAL_KILLS >= shoe_data["kills_required"]:
+            status_text = button_font.render("UNLOCK", True, (100, 255, 100))
+        else:
+            needed = shoe_data["kills_required"] - TOTAL_KILLS
+            status_text = small_font.render(f"Need {needed} more kills", True, (255, 100, 100))
+        
+        status_rect = status_text.get_rect(right=item_rect.right - 20, centery=item_rect.centery)
+        screen.blit(status_text, status_rect)
+        
+        buttons.append((item_rect, shoe_name))
+    
+    # Back button
+    back_button = pygame.Rect(50, HEIGHT - 80, 100, 40)
+    pygame.draw.rect(screen, (100, 100, 100), back_button)
+    pygame.draw.rect(screen, (200, 200, 200), back_button, 2)
+    back_text = button_font.render("BACK", True, (255, 255, 255))
+    back_text_rect = back_text.get_rect(center=back_button.center)
+    screen.blit(back_text, back_text_rect)
+    buttons.append((back_button, "back"))
+    
+    return buttons
+
+def handle_shop_events(buttons):
+    """Handle shop button clicks"""
+    global CURRENT_SHOE, OWNED_SHOES
+    
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return "quit"
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                return "back"
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mouse_pos = pygame.mouse.get_pos()
+            
+            for button_rect, action in buttons:
+                if button_rect.collidepoint(mouse_pos):
+                    if action == "back":
+                        return "back"
+                    elif action in SHOES:
+                        shoe_data = SHOES[action]
+                        
+                        if action in OWNED_SHOES:
+                            # Equip the shoe
+                            CURRENT_SHOE = action
+                            print(f"Equipped {action} boot!")
+                        elif TOTAL_KILLS >= shoe_data["kills_required"]:
+                            # Unlock the shoe
+                            OWNED_SHOES.add(action)
+                            CURRENT_SHOE = action
+                            print(f"Unlocked and equipped {action} boot!")
+                        else:
+                            needed = shoe_data["kills_required"] - TOTAL_KILLS
+                            print(f"Need {needed} more kills to unlock {action} boot!")
+                    
+    return None
     global NUM_BOIDS, MAX_SPEED, MAX_FORCE, NEIGHBOR_RADIUS, SEPARATION_RADIUS, OBJECT_SEPERATION_RADIUS, WIDTH, HEIGHT
     font = pygame.font.SysFont(None, 15)
 
@@ -273,8 +514,16 @@ def draw_menu(screen):
     dont_die_text_rect = dont_die_text.get_rect(center=dont_die_button.center)
     screen.blit(dont_die_text, dont_die_text_rect)
     
+    # Shop button
+    shop_button = pygame.Rect(WIDTH // 2 - button_width // 2, start_y + button_spacing * 2, button_width, button_height)
+    pygame.draw.rect(screen, (100, 50, 100), shop_button)
+    pygame.draw.rect(screen, (200, 100, 200), shop_button, 3)
+    shop_text = button_font.render("BOOT SHOP", True, (255, 255, 255))
+    shop_text_rect = shop_text.get_rect(center=shop_button.center)
+    screen.blit(shop_text, shop_text_rect)
+    
     # Main Game button
-    main_game_button = pygame.Rect(WIDTH // 2 - button_width // 2, start_y + button_spacing * 2, button_width, button_height)
+    main_game_button = pygame.Rect(WIDTH // 2 - button_width // 2, start_y + button_spacing * 3, button_width, button_height)
     pygame.draw.rect(screen, (50, 100, 50), main_game_button)
     pygame.draw.rect(screen, (100, 255, 100), main_game_button, 3)
     main_text = button_font.render("START GAME!", True, (255, 255, 255))
@@ -290,21 +539,22 @@ def draw_menu(screen):
     instructions = [
         "Kill Tutorial: Learn to stomp bugs",
         "Don't Die Tutorial: Protect your food",
+        "Boot Shop: Upgrade your stomping power",
         "Main Game: Full survival challenge"
     ]
     
     for i, instruction in enumerate(instructions):
         text = info_font.render(instruction, True, (150, 150, 150))
-        text_rect = text.get_rect(center=(WIDTH // 2, start_y + button_spacing * 3 + 50 + i * 25))
+        text_rect = text.get_rect(center=(WIDTH // 2, start_y + button_spacing * 4 + 50 + i * 25))
         screen.blit(text, text_rect)
     
-    return [kill_tutorial_button, dont_die_button, main_game_button]
+    return [kill_tutorial_button, dont_die_button, shop_button, main_game_button]
 
 def handle_menu_events(buttons):
     """Handle menu button clicks"""
     global current_game_state
     
-    kill_tutorial_button, dont_die_button, main_game_button = buttons
+    kill_tutorial_button, dont_die_button, shop_button, main_game_button = buttons
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -313,14 +563,13 @@ def handle_menu_events(buttons):
             mouse_pos = pygame.mouse.get_pos()
             
             if kill_tutorial_button.collidepoint(mouse_pos):
-                current_game_state = GAME_STATE_KILL_TUTORIAL
-                return True
+                return "kill_tutorial"
             elif dont_die_button.collidepoint(mouse_pos):
-                current_game_state = GAME_STATE_DONT_DIE_TUTORIAL
-                return True
+                return "dont_die_tutorial"
+            elif shop_button.collidepoint(mouse_pos):
+                return "shop"
             elif main_game_button.collidepoint(mouse_pos):
-                current_game_state = GAME_STATE_MAIN_GAME
-                return True
+                return "main_game"
     
     return True
 
@@ -336,11 +585,12 @@ async def run_kill_tutorial(screen, clock):
     tutorial_kills = 0
     tutorial_splats = []
     
-    # Load boot image
+    # Load boot image with current shoe size
     boot_image = None
     try:
         boot_image = pygame.image.load("boot.png").convert_alpha()
-        boot_image = pygame.transform.smoothscale(boot_image, (48, 48))
+        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
+        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
     except Exception:
         pass
     
@@ -376,12 +626,14 @@ async def run_kill_tutorial(screen, clock):
                     return True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
-                # Kill bugs within stomp radius
-                bugs_to_remove = [boid for boid in tutorial_boids if boid.position.distance_to(mouse_pos) < 30]
+                # Kill bugs within stomp radius using current shoe
+                stomp_radius = get_current_stomp_radius()
+                bugs_to_remove = [boid for boid in tutorial_boids if boid.position.distance_to(mouse_pos) < stomp_radius]
                 tutorial_kills += len(bugs_to_remove)
                 for boid in bugs_to_remove:
                     tutorial_boids.remove(boid)
                     tutorial_splats.append({'pos': mouse_pos.copy(), 'time': pygame.time.get_ticks()})
+                    add_kill()  # Track the kill
         
         # Spawn new bugs occasionally
         if len(tutorial_boids) < 3 and random.random() < 0.02:
@@ -451,6 +703,9 @@ async def run_kill_tutorial(screen, clock):
         else:
             pygame.draw.circle(screen, (100, 100, 100), mouse_pos, 15, 2)
         
+        # Draw upgrade notification
+        draw_upgrade_notification(screen)
+        
         pygame.display.flip()
         clock.tick(30)
     
@@ -472,11 +727,12 @@ async def run_dont_die_tutorial(screen, clock):
     start_time = pygame.time.get_ticks()
     tutorial_duration = 15000  # 15 seconds
     
-    # Load boot image
+    # Load boot image with current shoe size
     boot_image = None
     try:
         boot_image = pygame.image.load("boot.png").convert_alpha()
-        boot_image = pygame.transform.smoothscale(boot_image, (48, 48))
+        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
+        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
     except Exception:
         pass
     
@@ -502,12 +758,14 @@ async def run_dont_die_tutorial(screen, clock):
                     return True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.Vector2(pygame.mouse.get_pos())
-                # Kill bugs within stomp radius
-                bugs_to_remove = [boid for boid in tutorial_boids if boid.position.distance_to(mouse_pos) < 30]
+                # Kill bugs within stomp radius using current shoe
+                stomp_radius = get_current_stomp_radius()
+                bugs_to_remove = [boid for boid in tutorial_boids if boid.position.distance_to(mouse_pos) < stomp_radius]
                 tutorial_kills += len(bugs_to_remove)
                 for boid in bugs_to_remove:
                     tutorial_boids.remove(boid)
                     tutorial_splats.append({'pos': mouse_pos.copy(), 'time': pygame.time.get_ticks()})
+                    add_kill()  # Track the kill
         
         # Spawn new bugs occasionally
         if len(tutorial_boids) < 5:
@@ -596,6 +854,9 @@ async def run_dont_die_tutorial(screen, clock):
             screen.blit(boot_image, rect)
         else:
             pygame.draw.circle(screen, (100, 100, 100), mouse_pos, 15, 2)
+        
+        # Draw upgrade notification
+        draw_upgrade_notification(screen)
         
         pygame.display.flip()
         clock.tick(30)
@@ -965,9 +1226,20 @@ async def main():
                 current_game_state = GAME_STATE_KILL_TUTORIAL
             elif action == "dont_die_tutorial":
                 current_game_state = GAME_STATE_DONT_DIE_TUTORIAL
+            elif action == "shop":
+                current_game_state = GAME_STATE_SHOP
             elif action == "main_game":
                 current_game_state = GAME_STATE_MAIN_GAME
             elif not action:  # False means quit
+                running = False
+        
+        elif current_game_state == GAME_STATE_SHOP:
+            shop_buttons = draw_shop(screen)
+            shop_action = handle_shop_events(shop_buttons)
+            
+            if shop_action == "back":
+                current_game_state = GAME_STATE_MENU
+            elif shop_action == "quit":
                 running = False
         
         elif current_game_state == GAME_STATE_KILL_TUTORIAL:
@@ -993,7 +1265,7 @@ async def main():
 
 async def run_main_game(screen, clock):
     """Run the original main game"""
-    global current_game_state, LEVEL, MAX_SPEED, SPAWN_INTEVALS
+    global current_game_state, LEVEL, MAX_SPEED, SPAWN_INTEVALS, DEFINITE_FOOD_HEALTH
     
     # Create spawn holes for main game
     create_spawn_holes()
@@ -1010,11 +1282,12 @@ async def run_main_game(screen, clock):
     objects = [movable_object_1, movable_object_2, movable_object_3]
     blocks = []
 
-    # Load boot image once
+    # Load boot image once and size it based on current shoe
     boot_image_path = os.path.join(os.path.dirname(__file__), "boot.png")
     try:
         boot_image = pygame.image.load("boot.png").convert_alpha()
-        boot_image = pygame.transform.smoothscale(boot_image, (48, 48))
+        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
+        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
     except Exception as e:
         print(f"Error loading boot.png: {e}")
         boot_image = None
@@ -1061,10 +1334,13 @@ async def run_main_game(screen, clock):
                     return "menu"
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.Vector2(event.pos)
-                boids_to_remove = [boid for boid in boids if boid.position.distance_to(mouse_pos) < 30]
+                # Use current shoe's stomp radius
+                stomp_radius = get_current_stomp_radius()
+                boids_to_remove = [boid for boid in boids if boid.position.distance_to(mouse_pos) < stomp_radius]
                 global KILLS
                 KILLS += len(boids_to_remove)
                 for boid in boids_to_remove:
+                    add_kill()  # Track total kills across all games
                     boid.die(boids, splats)
 
         screen.fill((0, 100, 0))  # RGB for dark green
@@ -1208,6 +1484,13 @@ async def run_main_game(screen, clock):
         # Draw level info
         level_text = font.render(f"Level {LEVEL}", True, (255, 255, 255))
         screen.blit(level_text, (10, 10))
+
+        # Draw shoe info
+        shoe_info_text = pygame.font.SysFont(None, 24).render(f"Boot: {CURRENT_SHOE.title()} (Kills: {TOTAL_KILLS})", True, (255, 255, 0))
+        screen.blit(shoe_info_text, (10, 50))
+
+        # Draw upgrade notification
+        draw_upgrade_notification(screen)
 
         pygame.display.flip()
         clock.tick(30)
