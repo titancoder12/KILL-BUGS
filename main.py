@@ -585,7 +585,6 @@ def draw_menu(screen):
         "Kill Tutorial: Learn to stomp bugs",
         "Don't Die Tutorial: Protect your food",
         "Boot Shop: Upgrade your stomping power",
-        "Main Game: Full survival challenge"
     ]
     
     for i, instruction in enumerate(instructions):
