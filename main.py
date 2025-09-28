@@ -30,6 +30,7 @@ KILLS = 0
 BOOT_EQUIPPED = False
 LEVEL = 1
 SPAWN_INTERVALS = 1000
+MAX_ANTS = 400
 
 # Game states
 GAME_STATE_SPLASH = "splash"
@@ -1072,9 +1073,9 @@ async def run_main_game(screen, clock):
         draw_spawn_holes(screen)
         
         now = pygame.time.get_ticks()
-        # Spawn one ant every second during level one
+        # Spawn one ant every second during level one, but cap at MAX_ANTS
         global SPAWN_INTERVALS
-        if not success_displayed and now - ant_spawn_timer >= SPAWN_INTERVALS:
+        if not success_displayed and now - ant_spawn_timer >= SPAWN_INTERVALS and len(boids) < MAX_ANTS:
             boids.append(spawn_ant_from_hole())
             ant_spawn_timer = now
 
