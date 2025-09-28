@@ -33,6 +33,10 @@ SPAWN_INTERVALS = 1000
 MAX_ANTS = 400
 DEFINITE_FOOD_HEALTH = 60  # Track food health across levels
 
+# Click effect variables for showing stomp radius
+click_effects = []  # List of {'pos': Vector2, 'time': int, 'radius': int}
+CLICK_EFFECT_DURATION = 500  # milliseconds
+
 # Game states
 GAME_STATE_SPLASH = "splash"
 GAME_STATE_MENU = "menu"
@@ -200,6 +204,34 @@ def draw_spawn_holes(screen):
         # Draw hole border
         pygame.draw.circle(screen, (30, 20, 10), (int(hole_pos.x), int(hole_pos.y)), SPAWN_HOLE_RADIUS, 3)
 
+def draw_click_effects(screen):
+    """Draw click effects showing stomp radius"""
+    global click_effects
+    
+    current_time = pygame.time.get_ticks()
+    # Remove expired effects
+    click_effects[:] = [effect for effect in click_effects 
+                       if current_time - effect['time'] < CLICK_EFFECT_DURATION]
+    
+    for effect in click_effects:
+        elapsed = current_time - effect['time']
+        progress = elapsed / CLICK_EFFECT_DURATION
+        
+        # Fade out over time
+        alpha = int(255 * (1 - progress))
+        radius = effect['radius']
+        
+        # Create a surface with per-pixel alpha for the circle
+        circle_surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        
+        # Draw expanding circle
+        circle_radius = int(radius * (0.5 + 0.5 * progress))
+        pygame.draw.circle(circle_surface, (255, 255, 0, alpha), (radius, radius), circle_radius, 3)
+        
+        # Blit to screen
+        circle_rect = circle_surface.get_rect(center=(effect['pos'].x, effect['pos'].y))
+        screen.blit(circle_surface, circle_rect)
+
 def draw_upgrade_notification(screen):
     """Draw upgrade notification if active"""
     global UPGRADE_NOTIFICATION
@@ -265,6 +297,17 @@ def get_current_stomp_radius():
     """Get the stomp radius of the currently equipped shoe"""
     return SHOES[CURRENT_SHOE]["stomp_radius"]
 
+def load_boot_image():
+    """Load boot image with current shoe size"""
+    try:
+        boot_image = pygame.image.load("boot.png").convert_alpha()
+        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
+        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
+        return boot_image
+    except Exception as e:
+        print(f"Error loading boot.png: {e}")
+        return None
+
 def add_kill():
     """Add a kill to the total count and check for automatic upgrades"""
     global TOTAL_KILLS, CURRENT_SHOE, OWNED_SHOES, UPGRADE_NOTIFICATION
@@ -277,12 +320,14 @@ def add_kill():
             shoe_name not in OWNED_SHOES):
             # Auto-unlock and equip the new shoe
             OWNED_SHOES.add(shoe_name)
+            old_shoe = CURRENT_SHOE
             CURRENT_SHOE = shoe_name
             
             # Set upgrade notification
             UPGRADE_NOTIFICATION = {
                 "text": f"UPGRADE! {shoe_name.title()} Boot Unlocked!",
-                "time": pygame.time.get_ticks()
+                "time": pygame.time.get_ticks(),
+                "reload_boot": True  # Signal that boot image needs reloading
             }
             
             print(f"🎉 UPGRADE! Unlocked {shoe_name.title()} Boot! (Stomp radius: {shoe_data['stomp_radius']}px)")
@@ -586,13 +631,7 @@ async def run_kill_tutorial(screen, clock):
     tutorial_splats = []
     
     # Load boot image with current shoe size
-    boot_image = None
-    try:
-        boot_image = pygame.image.load("boot.png").convert_alpha()
-        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
-        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
-    except Exception:
-        pass
+    boot_image = load_boot_image()
     
     # Load tutorial illustration image
     tutorial_image = None
@@ -630,6 +669,15 @@ async def run_kill_tutorial(screen, clock):
                 stomp_radius = get_current_stomp_radius()
                 bugs_to_remove = [boid for boid in tutorial_boids if boid.position.distance_to(mouse_pos) < stomp_radius]
                 tutorial_kills += len(bugs_to_remove)
+                
+                # Add click effect to show stomp radius
+                global click_effects
+                click_effects.append({
+                    'pos': mouse_pos.copy(),
+                    'time': pygame.time.get_ticks(),
+                    'radius': stomp_radius
+                })
+                
                 for boid in bugs_to_remove:
                     tutorial_boids.remove(boid)
                     tutorial_splats.append({'pos': mouse_pos.copy(), 'time': pygame.time.get_ticks()})
@@ -646,6 +694,13 @@ async def run_kill_tutorial(screen, clock):
         # Remove old splats
         now = pygame.time.get_ticks()
         tutorial_splats[:] = [s for s in tutorial_splats if now - s['time'] < 2000]
+        
+        # Check if boot image needs reloading due to upgrade
+        global UPGRADE_NOTIFICATION
+        if (UPGRADE_NOTIFICATION is not None and 
+            UPGRADE_NOTIFICATION.get("reload_boot", False)):
+            boot_image = load_boot_image()
+            UPGRADE_NOTIFICATION["reload_boot"] = False  # Clear the flag
         
         # Draw everything
         screen.fill((0, 100, 0))  # Green background
@@ -728,13 +783,7 @@ async def run_dont_die_tutorial(screen, clock):
     tutorial_duration = 15000  # 15 seconds
     
     # Load boot image with current shoe size
-    boot_image = None
-    try:
-        boot_image = pygame.image.load("boot.png").convert_alpha()
-        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
-        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
-    except Exception:
-        pass
+    boot_image = load_boot_image()
     
     # Load splat image
     splat_image = None
@@ -798,6 +847,12 @@ async def run_dont_die_tutorial(screen, clock):
         
         # Remove old splats
         tutorial_splats[:] = [s for s in tutorial_splats if now - s['time'] < 2000]
+        
+        # Check if boot image needs reloading due to upgrade
+        if (UPGRADE_NOTIFICATION is not None and 
+            UPGRADE_NOTIFICATION.get("reload_boot", False)):
+            boot_image = load_boot_image()
+            UPGRADE_NOTIFICATION["reload_boot"] = False  # Clear the flag
         
         # Draw everything
         screen.fill((0, 100, 0))  # Green background
@@ -1283,14 +1338,7 @@ async def run_main_game(screen, clock):
     blocks = []
 
     # Load boot image once and size it based on current shoe
-    boot_image_path = os.path.join(os.path.dirname(__file__), "boot.png")
-    try:
-        boot_image = pygame.image.load("boot.png").convert_alpha()
-        current_shoe_size = SHOES[CURRENT_SHOE]["size"]
-        boot_image = pygame.transform.smoothscale(boot_image, (current_shoe_size, current_shoe_size))
-    except Exception as e:
-        print(f"Error loading boot.png: {e}")
-        boot_image = None
+    boot_image = load_boot_image()
 
     # Load splat image once
     splat_image_path = os.path.join(os.path.dirname(__file__), "splat.png")
@@ -1397,10 +1445,10 @@ async def run_main_game(screen, clock):
             OBJECT_PUSH_FORCE = min(OBJECT_PUSH_FORCE + 0.5, 10)  # Cap push force at 10
             ATTRACTION_RADIUS = min(ATTRACTION_RADIUS + 20, 300)  # Cap attraction radius at 300
 
-        # Auto-advance after 3 seconds
+        # Auto-advance after 5 seconds
         if success_displayed and success_display_time:
             time_since_success = now - success_display_time
-            if time_since_success >= 3000:  # 3 seconds
+            if time_since_success >= 5000:  # 5 seconds
                 if exit_status == "success":
                     # Reset KILLS for next level
                     KILLS = 0
@@ -1465,6 +1513,13 @@ async def run_main_game(screen, clock):
 
         # Draw splats
         splats[:] = [s for s in splats if now - s['time'] < 2000]
+        
+        # Check if boot image needs reloading due to upgrade
+        if (UPGRADE_NOTIFICATION is not None and 
+            UPGRADE_NOTIFICATION.get("reload_boot", False)):
+            boot_image = load_boot_image()
+            UPGRADE_NOTIFICATION["reload_boot"] = False  # Clear the flag
+        
         for s in splats:
             if splat_img:
                 rect = splat_img.get_rect(center=(s['pos'].x, s['pos'].y))
