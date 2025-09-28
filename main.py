@@ -604,6 +604,14 @@ async def run_dont_die_tutorial(screen, clock):
 class FoodObject:
     def __init__(self, x, y):
         self.position = pygame.Vector2(x, y)
+        # Load strawberry image once for all FoodObjects
+        if not hasattr(FoodObject, "strawberry_image"):
+            try:
+                img = pygame.image.load("strawberry.png").convert_alpha()
+                FoodObject.strawberry_image = pygame.transform.smoothscale(img, (40, 40))
+            except Exception as e:
+                print(f"Error loading strawberry.png: {e}")
+                FoodObject.strawberry_image = None
         self.size = 20  # radius for simplicity
         self.mass = 5
         self.held_in_goal = False
@@ -637,8 +645,13 @@ class FoodObject:
         self.position.y = max(self.size, min(self.position.y, HEIGHT - self.size))
 
     def draw(self, screen):
-        # Draw food as a yellow circle
-        pygame.draw.circle(screen, (255, 255, 0), self.position, self.size)
+        # Draw strawberry image if available
+        if hasattr(FoodObject, "strawberry_image") and FoodObject.strawberry_image:
+            rect = FoodObject.strawberry_image.get_rect(center=(int(self.position.x), int(self.position.y)))
+            screen.blit(FoodObject.strawberry_image, rect)
+        else:
+            # Fallback: draw food as a yellow circle
+            pygame.draw.circle(screen, (255, 255, 0), self.position, self.size)
         # Draw health bar above
         bar_width = 40
         bar_height = 6
@@ -1024,7 +1037,7 @@ async def run_main_game(screen, clock):
     one_second_ticker = pygame.time.get_ticks()
 
     start_time = pygame.time.get_ticks()
-    timer_duration = 30000  # 30 seconds in milliseconds
+    timer_duration = 3000  # 30 seconds in milliseconds
     success_displayed = False
     success_display_time = None  # Track when success screen started showing
 
@@ -1078,30 +1091,34 @@ async def run_main_game(screen, clock):
             exit_status = "loss"
             success_displayed = True
             success_display_time = now  # Start the 3-second timer
-            boids.clear()
-            objects.clear()
             final_ants_killed = KILLS if 'KILLS' in globals() else 0
             final_points = final_ants_killed * 5
 
         # Check for success
+        # Check for success
+                # Check for success
         elif elapsed >= timer_duration and not success_displayed:
             print("LEVEL COMPLETE!")
             exit_status = "success"
             success_displayed = True
             success_display_time = now  # Start the 3-second timer
             final_ants_killed = KILLS if 'KILLS' in globals() else 0
+            final_food_health = sum(obj.health for obj in food_objects)  # Calculate BEFORE clearing
             final_points = final_food_health * 10 + final_ants_killed * 5
+            DEFINITE_FOOD_HEALTH = final_food_health  # Store for next level
+            
+            # Clear objects immediately after calculating final_food_health
             boids.clear()
             objects.clear()
             
             # Level progression
             global MAX_FORCE, LEVEL, OBJECT_PUSH_FORCE, ATTRACTION_RADIUS
-            MAX_FORCE += 1
+            MAX_FORCE += 0.5
             LEVEL += 1
-            MAX_SPEED *= 1.5
-            SPAWN_INTERVALS *= 0.5  # Faster spawning, minimum 0.5 seconds
-            OBJECT_PUSH_FORCE += 0.1
-            ATTRACTION_RADIUS += 20
+            MAX_SPEED = min(MAX_SPEED * 1.25, 20)  # Cap max speed at 20
+            SPAWN_INTERVALS *= 0.25  # Faster spawning, minimum 0.5 seconds
+            OBJECT_PUSH_FORCE = min(OBJECT_PUSH_FORCE + 0.5, 10)  # Cap push force at 10
+            ATTRACTION_RADIUS = min(ATTRACTION_RADIUS + 20, 300)  # Cap attraction radius at 300
 
         # Auto-advance after 3 seconds
         if success_displayed and success_display_time:
@@ -1115,6 +1132,38 @@ async def run_main_game(screen, clock):
                 else:
                     # Lost - return to menu
                     return "menu"
+
+        # Draw end game messages
+        if success_displayed:
+            if exit_status == "loss":
+                LEVEL = 1  # Reset level on loss
+                complete_text = font.render("Level Failed :(", True, (255, 100, 100))
+                sub_text = font.render("Returning to menu...", True, (200, 200, 200))
+            else:
+                complete_text = font.render(f"Level {LEVEL-1} Complete!", True, (100, 255, 100))
+                sub_text = font.render(f"Starting Level {LEVEL}...", True, (200, 200, 200))
+
+            screen.blit(complete_text, (WIDTH // 2 - complete_text.get_width() // 2, HEIGHT // 2 + 40))
+            screen.blit(sub_text, (WIDTH // 2 - sub_text.get_width() // 2, HEIGHT // 2 + 90))
+            
+            points_text = font.render(f"Points: {final_points}", True, (0, 200, 255))
+            screen.blit(points_text, (WIDTH // 2 - points_text.get_width() // 2, HEIGHT // 2 + 140))
+            
+            ants_text = font.render(f"Ants Killed: {final_ants_killed}", True, (0, 200, 255))
+            screen.blit(ants_text, (WIDTH // 2 - ants_text.get_width() // 2, HEIGHT // 2 + 190))
+
+            food_text = font.render(f"Food Health: {DEFINITE_FOOD_HEALTH}", True, (0, 200, 255))
+            screen.blit(food_text, (WIDTH // 2 - food_text.get_width() // 2, HEIGHT // 2 + 240))
+            
+            # REMOVE THESE LINES - objects already cleared above
+            # boids.clear()
+            # objects.clear()
+
+            # Show countdown
+            if success_display_time:
+                countdown = max(0, 3 - ((now - success_display_time) // 1000))
+                countdown_text = font.render(f"Next in: {countdown}s", True, (255, 255, 0))
+                screen.blit(countdown_text, (WIDTH // 2 - countdown_text.get_width() // 2, HEIGHT // 2 + 290))
 
         # Only update game objects if not finished
         if not success_displayed:
@@ -1158,34 +1207,6 @@ async def run_main_game(screen, clock):
         # Draw level info
         level_text = font.render(f"Level {LEVEL}", True, (255, 255, 255))
         screen.blit(level_text, (10, 10))
-
-        # Draw end game messages
-        if success_displayed:
-            if exit_status == "loss":
-                LEVEL = 1  # Reset level on loss
-                complete_text = font.render("Level Failed :(", True, (255, 100, 100))
-                sub_text = font.render("Returning to menu...", True, (200, 200, 200))
-            else:
-                complete_text = font.render(f"Level {LEVEL-1} Complete!", True, (100, 255, 100))
-                sub_text = font.render(f"Starting Level {LEVEL}...", True, (200, 200, 200))
-
-            screen.blit(complete_text, (WIDTH // 2 - complete_text.get_width() // 2, HEIGHT // 2 + 40))
-            screen.blit(sub_text, (WIDTH // 2 - sub_text.get_width() // 2, HEIGHT // 2 + 90))
-            
-            points_text = font.render(f"Points: {final_points}", True, (0, 200, 255))
-            screen.blit(points_text, (WIDTH // 2 - points_text.get_width() // 2, HEIGHT // 2 + 140))
-            
-            ants_text = font.render(f"Ants Killed: {final_ants_killed}", True, (0, 200, 255))
-            screen.blit(ants_text, (WIDTH // 2 - ants_text.get_width() // 2, HEIGHT // 2 + 190))
-            
-            food_text = font.render(f"Food Health: {final_food_health}", True, (0, 200, 255))
-            screen.blit(food_text, (WIDTH // 2 - food_text.get_width() // 2, HEIGHT // 2 + 240))
-            
-            # Show countdown
-            if success_display_time:
-                countdown = max(0, 3 - ((now - success_display_time) // 1000))
-                countdown_text = font.render(f"Next in: {countdown}s", True, (255, 255, 0))
-                screen.blit(countdown_text, (WIDTH // 2 - countdown_text.get_width() // 2, HEIGHT // 2 + 290))
 
         pygame.display.flip()
         clock.tick(30)
